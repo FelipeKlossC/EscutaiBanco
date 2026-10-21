@@ -17,13 +17,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Musica
+import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
-    val playlist = AppRepository.buscarPlaylistPorId(playlistId)
+    val coroutineScope = rememberCoroutineScope()
+    var playlist by remember { mutableStateOf<Playlist?>(null) }
+    var musicasDaPlaylist by remember { mutableStateOf<List<Musica>>(emptyList()) }
+    var todasMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var showDialogAdicionarMusica by remember { mutableStateOf(false) }
+
+    fun carregarDados() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val p = AppRepository.buscarPlaylistPorId(playlistId)
+            val musicas = AppRepository.obterMusicasDaPlaylist(playlistId)
+            val todas = AppRepository.carregarMusicas()
+            playlist = p
+            musicasDaPlaylist = musicas
+            todasMusicas = todas
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(playlistId) {
+        carregarDados()
+    }
 
     Scaffold(
         topBar = {
@@ -39,15 +63,19 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
         },
         containerColor = Color(0xFF0D0B1D)
     ) { paddingValues ->
-        if (playlist == null) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFD946EF))
+            }
+        } else if (playlist == null) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 Text("Playlist não encontrada!", color = Color.White, fontSize = 18.sp)
             }
         } else {
-            val musicasDaPlaylist = AppRepository.obterMusicasDaPlaylist(playlistId)
-            val tempoTotalSegundos = AppRepository.calcularTempoTotalPlaylistSegundos(playlistId)
+            val pl = playlist!!
+            val tempoTotalSegundos = musicasDaPlaylist.sumOf { it.duracaoSegundos }
             val tempoTotalMinutos = tempoTotalSegundos / 60
-            val musicaMaisOuvida = AppRepository.obterMusicaMaisOuvidaDaPlaylist(playlistId)
+            val musicaMaisOuvida = musicasDaPlaylist.maxByOrNull { it.reproducoes }
 
             Column(
                 modifier = Modifier
@@ -55,7 +83,6 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                     .padding(paddingValues)
                     .padding(16.dp)
             ) {
-                // Card de Resumo e Métricas Calculadas (Passo a mais de Dificuldade - Seção 3.2)
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF381140)),
@@ -65,13 +92,13 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = playlist.nome,
+                            text = pl.nome,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Text(
-                            text = playlist.descricao,
+                            text = pl.descricao,
                             fontSize = 14.sp,
                             color = Color.LightGray,
                             modifier = Modifier.padding(top = 4.dp)
@@ -79,7 +106,6 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.DarkGray)
 
-                        // MÉTROLOGIA CALCULADA / DADOS COMBINADOS DAS 2 DATA CLASSES
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -118,7 +144,6 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Lista combinada das Músicas pertencentes a essa Playlist
                 if (musicasDaPlaylist.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -163,7 +188,10 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                     }
                                     IconButton(
                                         onClick = {
-                                            AppRepository.removerMusicaDaPlaylist(playlistId, musica.id)
+                                            coroutineScope.launch(Dispatchers.IO) {
+                                                AppRepository.removerMusicaDaPlaylist(playlistId, musica.id)
+                                                carregarDados()
+                                            }
                                         }
                                     ) {
                                         Icon(
@@ -181,9 +209,8 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
         }
     }
 
-    // Modal/Dialog para adicionar música da biblioteca global à playlist
     if (showDialogAdicionarMusica && playlist != null) {
-        val musicasForaDaPlaylist = AppRepository.musicas.filter { it.id !in playlist.musicasIds }
+        val musicasForaDaPlaylist = todasMusicas.filter { it.id !in playlist!!.musicasIds }
 
         AlertDialog(
             onDismissRequest = { showDialogAdicionarMusica = false },
@@ -191,7 +218,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
             containerColor = Color(0xFF1E1A3A),
             text = {
                 if (musicasForaDaPlaylist.isEmpty()) {
-                    Text("Todas as músicas da biblioteca já estão nesta playlist!", color = Color.LightGray)
+                    Text("Todas as músicas do banco já estão nesta playlist!", color = Color.LightGray)
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(musicasForaDaPlaylist) { m ->
@@ -199,7 +226,10 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        AppRepository.adicionarMusicaAPlaylist(playlistId, m.id)
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            AppRepository.adicionarMusicaAPlaylist(playlistId, m.id)
+                                            carregarDados()
+                                        }
                                         showDialogAdicionarMusica = false
                                     }
                                     .padding(8.dp),

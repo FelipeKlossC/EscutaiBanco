@@ -10,7 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,10 +20,25 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerfilScreen(navController: NavController) {
+    val coroutineScope = rememberCoroutineScope()
+    var totalMusicas by remember { mutableIntStateOf(0) }
+    var totalPlaylists by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch(Dispatchers.IO) {
+            val musicas = AppRepository.carregarMusicas()
+            val playlists = AppRepository.carregarPlaylists()
+            totalMusicas = musicas.size
+            totalPlaylists = playlists.size
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -46,7 +61,6 @@ fun PerfilScreen(navController: NavController) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Foto de Perfil
             Box(
                 modifier = Modifier
                     .size(100.dp)
@@ -68,7 +82,6 @@ fun PerfilScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // --- Card do Plano VIP / Ir para Planos ---
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF381140)),
@@ -98,7 +111,6 @@ fun PerfilScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- Botão para Acessar Histórico de Músicas Ouvidas ---
             Button(
                 onClick = { navController.navigate(Rotas.HISTORICO) },
                 shape = RoundedCornerShape(12.dp),
@@ -112,7 +124,6 @@ fun PerfilScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Resumo de Estatísticas do Ouvinte
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
@@ -123,14 +134,14 @@ fun PerfilScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Músicas Cadastradas", color = Color.Gray)
-                        Text("${AppRepository.musicas.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Músicas Cadastradas no Banco", color = Color.Gray)
+                        Text("$totalMusicas", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Playlists Criadas", color = Color.Gray)
-                        Text("${AppRepository.playlists.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Playlists Criadas no Banco", color = Color.Gray)
+                        Text("$totalPlaylists", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
 

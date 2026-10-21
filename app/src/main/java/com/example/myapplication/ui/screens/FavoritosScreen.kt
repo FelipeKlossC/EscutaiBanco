@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,12 +17,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Musica
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritosScreen(navController: NavController) {
-    val musicasFavoritas = AppRepository.musicas.filter { it.isFavorito }
+    val coroutineScope = rememberCoroutineScope()
+    var musicasFavoritas by remember { mutableStateOf<List<Musica>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    fun carregarFavoritos() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val favs = AppRepository.buscarFavoritos()
+            musicasFavoritas = favs
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        carregarFavoritos()
+    }
 
     Scaffold(
         topBar = {
@@ -52,7 +69,14 @@ fun FavoritosScreen(navController: NavController) {
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            if (musicasFavoritas.isEmpty()) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Color(0xFFD946EF))
+                }
+            } else if (musicasFavoritas.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -102,7 +126,12 @@ fun FavoritosScreen(navController: NavController) {
                                     }
                                 }
 
-                                IconButton(onClick = { AppRepository.toggleFavorito(musica.id) }) {
+                                IconButton(onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        AppRepository.toggleFavorito(musica)
+                                        carregarFavoritos()
+                                    }
+                                }) {
                                     Icon(
                                         imageVector = Icons.Default.Favorite,
                                         contentDescription = "Desfavoritar",

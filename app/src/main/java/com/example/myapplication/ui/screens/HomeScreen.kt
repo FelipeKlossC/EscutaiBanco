@@ -22,13 +22,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
+    val coroutineScope = rememberCoroutineScope()
+    var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentProgress by remember { mutableFloatStateOf(0.35f) }
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch(Dispatchers.IO) {
+            val dados = AppRepository.carregarPlaylists()
+            playlists = dados
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -37,7 +49,6 @@ fun HomeScreen(navController: NavController) {
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp)
     ) {
-        // --- 1. Top Header Bar ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -45,7 +56,6 @@ fun HomeScreen(navController: NavController) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Perfil / Avatar
             IconButton(
                 onClick = { navController.navigate(Rotas.PERFIL) },
                 modifier = Modifier
@@ -59,7 +69,6 @@ fun HomeScreen(navController: NavController) {
                 )
             }
 
-            // Logo Escutaí com Onda Sonora
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
@@ -79,8 +88,7 @@ fun HomeScreen(navController: NavController) {
                 )
             }
 
-            // Botão Compartilhar
-            IconButton(onClick = { /* Ação de compartilhar */ }) {
+            IconButton(onClick = { }) {
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = "Compartilhar",
@@ -91,7 +99,6 @@ fun HomeScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // --- 2. Card do Player Principal / Carrossel em Destaque ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -109,7 +116,6 @@ fun HomeScreen(navController: NavController) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(20.dp)
                 ) {
-                    // Capa do Álbum / Imagem Simulada
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -141,7 +147,6 @@ fun HomeScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Título e Artista
                     Text(
                         text = "STARBOY - The Weeknd",
                         fontSize = 18.sp,
@@ -171,7 +176,6 @@ fun HomeScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Controles de Mídia
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -183,7 +187,6 @@ fun HomeScreen(navController: NavController) {
                         IconButton(onClick = {}) {
                             Icon(Icons.Default.SkipPrevious, contentDescription = "Anterior", tint = Color.White)
                         }
-                        // Botão Play/Pause Principal
                         FloatingActionButton(
                             onClick = { isPlaying = !isPlaying },
                             shape = CircleShape,
@@ -207,7 +210,6 @@ fun HomeScreen(navController: NavController) {
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Barra de Progresso
                     Slider(
                         value = currentProgress,
                         onValueChange = { currentProgress = it },
@@ -224,10 +226,9 @@ fun HomeScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Texto/Botão "abrir essa playlist"
         TextButton(
             onClick = {
-                val primeiraPlaylist = AppRepository.playlists.firstOrNull()
+                val primeiraPlaylist = playlists.firstOrNull()
                 if (primeiraPlaylist != null) {
                     navController.navigate(Rotas.detalhePlaylist(primeiraPlaylist.id))
                 }
@@ -244,7 +245,6 @@ fun HomeScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- 3. Ações Rápidas & Lista de Playlists ---
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -264,8 +264,7 @@ fun HomeScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Playlists Rápidas em Destaque
-            AppRepository.playlists.take(2).forEach { playlist ->
+            playlists.take(2).forEach { playlist ->
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
@@ -322,7 +321,6 @@ fun HomeScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botão para ir para Gerenciar Músicas
             Button(
                 onClick = { navController.navigate(Rotas.LISTA_MUSICAS) },
                 shape = RoundedCornerShape(12.dp),

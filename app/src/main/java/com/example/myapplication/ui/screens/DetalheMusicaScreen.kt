@@ -17,12 +17,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Musica
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
-    val musica = AppRepository.buscarMusicaPorId(musicaId)
+    val coroutineScope = rememberCoroutineScope()
+    var musica by remember { mutableStateOf<Musica?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
+
+    LaunchedEffect(musicaId) {
+        coroutineScope.launch(Dispatchers.IO) {
+            val item = AppRepository.buscarMusicaPorId(musicaId)
+            musica = item
+            isLoading = false
+            if (item != null) {
+                AppRepository.registrarNoHistorico(item)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -38,16 +54,26 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
         },
         containerColor = Color(0xFF0D0B1D)
     ) { paddingValues ->
-        if (musica == null) {
+        if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Música não encontrada!", color = Color.White, fontSize = 18.sp)
+                CircularProgressIndicator(color = Color(0xFFD946EF))
+            }
+        } else if (musica == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Música não encontrada no banco de dados!", color = Color.White, fontSize = 18.sp)
             }
         } else {
+            val itemMusica = musica!!
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -55,7 +81,6 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Ilustração de capa da música
                 Box(
                     modifier = Modifier
                         .size(240.dp)
@@ -77,22 +102,20 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Nome da música e Artista
                 Text(
-                    text = musica.titulo,
+                    text = itemMusica.titulo,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Text(
-                    text = musica.artista,
+                    text = itemMusica.artista,
                     fontSize = 18.sp,
                     color = Color(0xFFE0AAFF)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Card com Dados Detalhados
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
@@ -104,7 +127,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Álbum:", color = Color.Gray)
-                            Text(musica.album, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(itemMusica.album, color = Color.White, fontWeight = FontWeight.SemiBold)
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
 
@@ -113,7 +136,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Gênero:", color = Color.Gray)
-                            Text(musica.genero, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(itemMusica.genero, color = Color.White, fontWeight = FontWeight.SemiBold)
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
 
@@ -122,7 +145,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Duração:", color = Color.Gray)
-                            Text(musica.duracaoFormatada(), color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(itemMusica.duracaoFormatada(), color = Color.White, fontWeight = FontWeight.SemiBold)
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
 
@@ -131,24 +154,28 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Total de Execuções:", color = Color.Gray)
-                            Text("${musica.reproducoes} vezes", color = Color(0xFFD946EF), fontWeight = FontWeight.Bold)
+                            Text("${itemMusica.reproducoes} vezes", color = Color(0xFFD946EF), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Botões de Interação
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { AppRepository.toggleFavorito(musica.id) }) {
+                    IconButton(onClick = {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            AppRepository.toggleFavorito(itemMusica)
+                            musica = AppRepository.buscarMusicaPorId(musicaId)
+                        }
+                    }) {
                         Icon(
-                            imageVector = if (musica.isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            imageVector = if (itemMusica.isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favoritar",
-                            tint = if (musica.isFavorito) Color.Red else Color.White,
+                            tint = if (itemMusica.isFavorito) Color.Red else Color.White,
                             modifier = Modifier.size(36.dp)
                         )
                     }
@@ -157,7 +184,11 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                         onClick = {
                             isPlaying = !isPlaying
                             if (isPlaying) {
-                                musica.reproducoes++
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    val musicaAtualizada = itemMusica.copy(reproducoes = itemMusica.reproducoes + 1)
+                                    AppRepository.atualizarMusica(musicaAtualizada)
+                                    musica = musicaAtualizada
+                                }
                             }
                         },
                         shape = CircleShape,
@@ -172,7 +203,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                         )
                     }
 
-                    IconButton(onClick = { /* Compartilhar faixa */ }) {
+                    IconButton(onClick = { }) {
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "Compartilhar",

@@ -39,7 +39,6 @@ fun AppNavigation() {
 
     Scaffold(
         bottomBar = {
-            // Requisito 3.1: BottomNavigation / NavigationBar funcionando de verdade
             NavigationBar(
                 containerColor = Color(0xFF1E1A3A),
                 contentColor = Color.White
@@ -72,23 +71,19 @@ fun AppNavigation() {
             }
         }
     ) { innerPadding ->
-        // Central NavHost (Requisito 3.1)
         NavHost(
             navController = navController,
             startDestination = Rotas.HOME,
             modifier = Modifier.padding(innerPadding)
         ) {
-            // 1. Tela Home
             composable(Rotas.HOME) {
                 HomeScreen(navController = navController)
             }
 
-            // 2. Tela de Lista de Músicas
             composable(Rotas.LISTA_MUSICAS) {
                 ListaMusicasScreen(navController = navController)
             }
 
-            // 3. Tela de Detalhe da Música (com argumento de rota)
             composable(
                 route = "${Rotas.DETALHE_MUSICA}/{musicaId}",
                 arguments = listOf(navArgument("musicaId") { type = NavType.IntType })
@@ -97,12 +92,10 @@ fun AppNavigation() {
                 DetalheMusicaScreen(navController = navController, musicaId = musicaId)
             }
 
-            // 4. Tela de Lista de Playlists
             composable(Rotas.LISTA_PLAYLISTS) {
                 ListaPlaylistsScreen(navController = navController)
             }
 
-            // 5. Tela de Detalhe da Playlist (com argumento de rota)
             composable(
                 route = "${Rotas.DETALHE_PLAYLIST}/{playlistId}",
                 arguments = listOf(navArgument("playlistId") { type = NavType.IntType })
@@ -111,27 +104,22 @@ fun AppNavigation() {
                 DetalhePlaylistScreen(navController = navController, playlistId = playlistId)
             }
 
-            // 6. Tela de Favoritos
             composable(Rotas.FAVORITOS) {
                 FavoritosScreen(navController = navController)
             }
 
-            // 7. Tela de Top / Ranking
             composable(Rotas.TOP_STATS) {
                 TopStatsScreen(navController = navController)
             }
 
-            // 8. Tela de Perfil
             composable(Rotas.PERFIL) {
                 PerfilScreen(navController = navController)
             }
 
-            // 9. Tela de Planos (Mensais e Anuais)
             composable(Rotas.PLANOS) {
                 PlanosScreen(navController = navController)
             }
 
-            // 10. Tela de Histórico de Execuções
             composable(Rotas.HISTORICO) {
                 HistoricoScreen(navController = navController)
             }

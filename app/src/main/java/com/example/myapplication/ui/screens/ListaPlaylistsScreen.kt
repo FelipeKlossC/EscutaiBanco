@@ -17,14 +17,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListaPlaylistsScreen(navController: NavController) {
+    val coroutineScope = rememberCoroutineScope()
+    var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
     var nome by remember { mutableStateOf("") }
     var descricao by remember { mutableStateOf("") }
     var erroFormulario by remember { mutableStateOf(false) }
+
+    var playlistParaEditar by remember { mutableStateOf<Playlist?>(null) }
+    var editNome by remember { mutableStateOf("") }
+    var editDescricao by remember { mutableStateOf("") }
+
+    fun atualizarLista() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val dados = AppRepository.carregarPlaylists()
+            playlists = dados
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        atualizarLista()
+    }
 
     Scaffold(
         topBar = {
@@ -46,7 +69,6 @@ fun ListaPlaylistsScreen(navController: NavController) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            // --- Formulário de Cadastro de Playlist ---
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
@@ -103,14 +125,23 @@ fun ListaPlaylistsScreen(navController: NavController) {
 
                     Button(
                         onClick = {
-                            if (nome.isNotBlank()) {
-                                AppRepository.adicionarPlaylist(
-                                    nome = nome,
-                                    descricao = if (descricao.isBlank()) "Playlist personalizada" else descricao
-                                )
+                            val n = nome.trim()
+                            val desc = if (descricao.isBlank()) "Playlist personalizada" else descricao.trim()
+
+                            if (n.isNotBlank()) {
                                 nome = ""
                                 descricao = ""
                                 erroFormulario = false
+
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    AppRepository.adicionarPlaylist(
+                                        Playlist(
+                                            nome = n,
+                                            descricao = desc
+                                        )
+                                    )
+                                    atualizarLista()
+                                }
                             } else {
                                 erroFormulario = true
                             }
@@ -121,68 +152,94 @@ fun ListaPlaylistsScreen(navController: NavController) {
                     ) {
                         Icon(Icons.Default.Queue, contentDescription = "Criar")
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Criar Playlist")
+                        Text("Criar Playlist no Banco")
                     }
                 }
             }
 
             Text(
-                text = "Playlists Disponíveis (${AppRepository.playlists.size})",
+                text = "Playlists Disponíveis (${playlists.size})",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            // --- Lista com LazyColumn + Card (Requisito 3.2) ---
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(AppRepository.playlists, key = { it.id }) { playlist ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                navController.navigate(Rotas.detalhePlaylist(playlist.id))
-                            }
-                    ) {
-                        Row(
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFD946EF))
+                }
+            } else if (playlists.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nenhuma playlist criada no banco.", color = Color.Gray)
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(playlists, key = { it.id }) { playlist ->
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .clickable {
+                                    navController.navigate(Rotas.detalhePlaylist(playlist.id))
+                                }
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = playlist.nome,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = playlist.descricao,
-                                    fontSize = 13.sp,
-                                    color = Color.LightGray
-                                )
-                                Text(
-                                    text = "${playlist.musicasIds.size} músicas na lista",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFE0AAFF),
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { AppRepository.removerPlaylist(playlist.id) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Excluir Playlist",
-                                        tint = Color(0xFFFF5555)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = playlist.nome,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
                                     )
+                                    Text(
+                                        text = playlist.descricao,
+                                        fontSize = 13.sp,
+                                        color = Color.LightGray
+                                    )
+                                    Text(
+                                        text = "${playlist.musicasIds.size} músicas na lista",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFE0AAFF),
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = {
+                                        playlistParaEditar = playlist
+                                        editNome = playlist.nome
+                                        editDescricao = playlist.descricao
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Editar Playlist",
+                                            tint = Color.White
+                                        )
+                                    }
+
+                                    IconButton(onClick = {
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            AppRepository.deletarPlaylist(playlist)
+                                            atualizarLista()
+                                        }
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Excluir Playlist",
+                                            tint = Color(0xFFFF5555)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -190,5 +247,56 @@ fun ListaPlaylistsScreen(navController: NavController) {
                 }
             }
         }
+    }
+
+    playlistParaEditar?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { playlistParaEditar = null },
+            title = { Text("Editar Playlist", color = Color.White) },
+            containerColor = Color(0xFF1E1A3A),
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = editNome,
+                        onValueChange = { editNome = it },
+                        label = { Text("Nome da Playlist") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                    OutlinedTextField(
+                        value = editDescricao,
+                        onValueChange = { editDescricao = it },
+                        label = { Text("Descrição") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val n = editNome.trim().ifBlank { playlist.nome }
+                        val desc = editDescricao.trim().ifBlank { playlist.descricao }
+
+                        val playlistAtualizada = playlist.copy(
+                            nome = n,
+                            descricao = desc
+                        )
+                        playlistParaEditar = null
+
+                        coroutineScope.launch(Dispatchers.IO) {
+                            AppRepository.atualizarPlaylist(playlistAtualizada)
+                            atualizarLista()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88))
+                ) {
+                    Text("Salvar no Banco")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistParaEditar = null }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            }
+        )
     }
 }

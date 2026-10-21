@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -7,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -16,11 +17,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Musica
+import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopStatsScreen(navController: NavController) {
-    val topMusicas = AppRepository.musicas.sortedByDescending { it.reproducoes }
+    val coroutineScope = rememberCoroutineScope()
+    var topMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch(Dispatchers.IO) {
+            val stats = AppRepository.buscarTopStats()
+            topMusicas = stats
+            isLoading = false
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -61,52 +76,64 @@ fun TopStatsScreen(navController: NavController) {
                 )
             }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                itemsIndexed(topMusicas) { index, musica ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFD946EF))
+                }
+            } else if (topMusicas.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nenhuma música disponível no banco.", color = Color.Gray)
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    itemsIndexed(topMusicas) { index, musica ->
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .clickable { navController.navigate(Rotas.detalheMusica(musica.id)) }
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "#${index + 1}",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = if (index == 0) Color.Yellow else Color(0xFFE0AAFF)
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = musica.titulo,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        text = "#${index + 1}",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (index == 0) Color.Yellow else Color(0xFFE0AAFF)
                                     )
-                                    Text(
-                                        text = musica.artista,
-                                        fontSize = 13.sp,
-                                        color = Color.LightGray
-                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column {
+                                        Text(
+                                            text = musica.titulo,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = musica.artista,
+                                            fontSize = 13.sp,
+                                            color = Color.LightGray
+                                        )
+                                    }
                                 }
-                            }
 
-                            Text(
-                                text = "${musica.reproducoes} plays",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFD946EF)
-                            )
+                                Text(
+                                    text = "${musica.reproducoes} plays",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFD946EF)
+                                )
+                            }
                         }
                     }
                 }

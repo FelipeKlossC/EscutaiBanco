@@ -1,14 +1,19 @@
 package com.example.myapplication.model
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "musicas")
 data class Musica(
-    val id: Int,
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
     val titulo: String,
     val artista: String,
     val album: String,
     val duracaoSegundos: Int,
     val genero: String,
-    var isFavorito: Boolean = false,
-    var reproducoes: Int = 0
+    val isFavorito: Boolean = false,
+    val reproducoes: Int = 0
 ) {
     fun duracaoFormatada(): String {
         val minutos = duracaoSegundos / 60

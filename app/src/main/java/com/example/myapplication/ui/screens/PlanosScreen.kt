@@ -17,12 +17,31 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Plano
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanosScreen(navController: NavController) {
-    var planoSelecionado by remember { mutableStateOf("Anual") }
+    val coroutineScope = rememberCoroutineScope()
+    var planos by remember { mutableStateOf<List<Plano>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var mensagemSucesso by remember { mutableStateOf(false) }
+    var nomePlanoAtivado by remember { mutableStateOf("") }
+
+    fun carregarDados() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val lista = AppRepository.carregarPlanos()
+            planos = lista
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        carregarDados()
+    }
 
     Scaffold(
         topBar = {
@@ -72,110 +91,76 @@ fun PlanosScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Card Plano Mensal ---
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (planoSelecionado == "Mensal") Color(0xFF8A1B88) else Color(0xFF1E1A3A)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Plano Mensal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("Cobrança mensal recorrente", fontSize = 12.sp, color = Color.LightGray)
-                        }
-                        Text("R$ 19,90/mês", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE0AAFF))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("• Áudio Hi-Fi de alta fidelidade", color = Color.White, fontSize = 13.sp)
-                    Text("• Sem anúncios comerciais", color = Color.White, fontSize = 13.sp)
-                    Text("• Pule quantas faixas quiser", color = Color.White, fontSize = 13.sp)
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            planoSelecionado = "Mensal"
-                            mensagemSucesso = true
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (planoSelecionado == "Mensal") Color.White else Color(0xFF8A1B88)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = if (planoSelecionado == "Mensal") "Plano Selecionado" else "Selecionar Plano Mensal",
-                            color = if (planoSelecionado == "Mensal") Color(0xFF8A1B88) else Color.White
-                        )
-                    }
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFD946EF))
                 }
-            }
+            } else {
+                planos.forEach { plano ->
+                    val isSelecionado = plano.isAtivo
 
-            // --- Card Plano Anual (Destaque) ---
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (planoSelecionado == "Anual") Color(0xFF8A1B88) else Color(0xFF1E1A3A)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Plano Anual VIP", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .background(Color(0xFFFF9800), RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text("ECONOMIZE 25%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                                }
-                            }
-                            Text("Cobrado anualmente (R$ 14,99/mês)", fontSize = 12.sp, color = Color.LightGray)
-                        }
-                        Text("R$ 179,90/ano", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE0AAFF))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("• Todos os benefícios do Plano Mensal", color = Color.White, fontSize = 13.sp)
-                    Text("• Downloads de playlists ilimitados offline", color = Color.White, fontSize = 13.sp)
-                    Text("• Acesso prioritário a lançamentos e shows", color = Color.White, fontSize = 13.sp)
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            planoSelecionado = "Anual"
-                            mensagemSucesso = true
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (planoSelecionado == "Anual") Color.White else Color(0xFF8A1B88)
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelecionado) Color(0xFF8A1B88) else Color(0xFF1E1A3A)
                         ),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
                     ) {
-                        Text(
-                            text = if (planoSelecionado == "Anual") "Plano Selecionado (Melhor Valor)" else "Selecionar Plano Anual",
-                            color = if (planoSelecionado == "Anual") Color(0xFF8A1B88) else Color.White
-                        )
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(plano.nome, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        if (plano.economia.isNotBlank()) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(Color(0xFFFF9800), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(plano.economia, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                            }
+                                        }
+                                    }
+                                    Text(plano.descricaoCobranca, fontSize = 12.sp, color = Color.LightGray)
+                                }
+                                Text(plano.preco, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE0AAFF))
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            plano.beneficios.forEach { beneficio ->
+                                Text("• $beneficio", color = Color.White, fontSize = 13.sp)
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch(Dispatchers.IO) {
+                                        AppRepository.selecionarPlano(plano.id)
+                                        carregarDados()
+                                    }
+                                    nomePlanoAtivado = plano.nome
+                                    mensagemSucesso = true
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSelecionado) Color.White else Color(0xFF8A1B88)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = if (isSelecionado) "Plano Ativo" else "Selecionar ${plano.nome}",
+                                    color = if (isSelecionado) Color(0xFF8A1B88) else Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -187,7 +172,7 @@ fun PlanosScreen(navController: NavController) {
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "Parabéns! Você ativou o $planoSelecionado com sucesso!",
+                        text = "Parabéns! Você ativou o $nomePlanoAtivado com sucesso no banco Room!",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
