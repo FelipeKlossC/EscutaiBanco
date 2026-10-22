@@ -92,7 +92,7 @@ Como rodar:
 
 Você vai precisar de uma versão recente do Android Studio (o projeto usa AGP 9.x e Gradle 9.5, então vale usar a estável mais atual), do Android SDK 35 (o Android Studio oferece instalar sozinho ao abrir o projeto), de um emulador ou de um celular com depuração USB ativada (Android 7.0 / API 24 ou superior) e de internet na primeira execução, pra baixar as dependências.
 
-1. Clone o repositório: git clone https://github.com/<usuario>/<repositorio>.git
+1. Clone o repositório: git clone (link do repositório)
 2. No Android Studio, vá em File → Open e escolha a pasta do projeto.
 3. Espere o Gradle Sync terminar (na primeira vez pode demorar uns minutos, porque ele também roda o KSP do Room).
 4. Crie um emulador em Tools → Device Manager ou conecte seu celular.
