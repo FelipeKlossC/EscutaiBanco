@@ -1,145 +1,127 @@
-# Escutaí - Trabalho 3: Persistência de Dados com Room Database
+Escutaí
 
-Aplicativo Android de reprodução de músicas, inspirado no Escutaí/Spotify, desenvolvido como projeto durante o semestre de Desenvolvimento de Aplicativos Móveis.
+O Escutaí é um app Android de música inspirado no Spotify (mas não é cópia, juro). Foi feito durante o semestre na matéria de Desenvolvimento de Aplicativos Móveis, em Kotlin com Jetpack Compose.
 
-**Integrantes do grupo:** Felipe Kloss, Gabriel Asserman, Mariana Almeida.
+Grupo: Felipe Kloss, Gabriel Asserman e Mariana Almeida.
 
----
+Com ele dá pra navegar por uma biblioteca de músicas, criar playlists, favoritar faixas, ver o ranking das mais ouvidas, consultar o histórico e simular a contratação de um plano VIP. Além do básico de um player, a gente colocou umas coisas próprias, como as métricas de cada playlist (duração total e música destaque) e o ranking de reproduções.
 
-## 📖 Sobre o Projeto e Evolução do Trabalho 2 para o Trabalho 3
+Neste Trabalho 3 o app deixou de guardar tudo na memória e passou a salvar os dados num banco local com Room (SQLite). Agora o que você adiciona, edita ou remove fica gravado no aparelho, e continua lá mesmo depois de fechar e abrir o app de novo.
 
-No **Trabalho 2**, os dados do aplicativo ficavam inteiramente armazenados em memória utilizando `mutableStateListOf`. Embora as ações de adicionar, favoritar, editar e remover funcionassem dinamicamente na UI, todas as alterações eram perdidas quando o app ou a Activity eram destruídos.
+Segue vídeo com o teste de persistência e demonstração das telas e funções do app novamente em arquivo zip junto à entrega no blackboard
 
-No **Trabalho 3**, evoluímos o projeto implementando o **Room Database** (SQLite abstraction) com **KSP (Kotlin Symbol Processing)** e **Coroutines (Dispatchers.IO)**. Agora, todas as operações de CRUD (Criar, Ler, Atualizar e Deletar) são verdadeiramente persistentes.
+Como estava o Trabalho 2 e o que mudou:
 
----
+No Trabalho 2 os dados ficavam num AppRepository com listas mutableStateListOf. Adicionar, favoritar e remover funcionavam e a tela atualizava na hora, mas era tudo na memória: fechou o app, perdeu tudo e voltava pros dados iniciais.
 
-## 🛠️ Arquitetura e Estrutura do Room
+No Trabalho 3 a gente evoluiu o mesmo projeto pra usar Room com KSP e Coroutines. As data classes viraram @Entity e ganharam seus DAOs. O AppRepository parou de guardar listas e passou a ler e escrever no banco, com try/catch e Log.e em cada operação. As telas de lista buscam os dados no banco quando abrem, e as telas de detalhe buscam o item direto pelo id que chega na rota. Também implementamos a edição de músicas e playlists, que não existia antes, e criamos uma terceira entidade, a Plano, pra guardar qual plano o usuário escolheu.
 
-### 1. Entidades (`@Entity`)
-Adaptamos as duas data classes principais do Trabalho 2 para se tornarem Entidades do Room:
+O que o app faz:
 
-* **`Musica`** (`@Entity(tableName = "musicas")`):
-  * `@PrimaryKey(autoGenerate = true) val id: Int = 0`
-  * `val titulo: String`
-  * `val artista: String`
-  * `val album: String`
-  * `val duracaoSegundos: Int`
-  * `val genero: String`
-  * `val isFavorito: Boolean = false`
-  * `val reproducoes: Int = 0`
-  * *Escolha dos campos:* Mantivemos os atributos essenciais para identificação da mídia, formatação de tempo e contabilização de popularidade (favorito e contagem de execuções).
+Na tela inicial tem o player, com play/pause, anterior, próxima, aleatório, repetir e barra de progresso, além das playlists em destaque. A biblioteca de músicas deixa cadastrar, listar, editar e remover faixas (título, artista, duração e gênero). Dá pra favoritar músicas com o coração e ver todas numa tela só. As playlists podem ser criadas, editadas, excluídas e abertas, e dentro de cada uma dá pra adicionar e remover músicas. O detalhe da playlist mostra o total de faixas, a duração total em minutos e a música mais ouvida. O detalhe da música mostra álbum, gênero, duração e total de execuções, e cada vez que você toca a faixa o contador sobe e é salvo no banco. Tem também o Top Músicas (ranking por reproduções), o Histórico de execuções, o Perfil com um resumo da atividade e a tela de Planos VIP, que é só simulada.
 
-* **`Playlist`** (`@Entity(tableName = "playlists")`):
-  * `@PrimaryKey(autoGenerate = true) val id: Int = 0`
-  * `val nome: String`
-  * `val descricao: String`
-  * `val musicasIds: List<Int> = emptyList()`
-  * *Escolha dos campos:* Permitiu relacionar as playlists às músicas através de uma lista de IDs das faixas contidas, viabilizada pelo `Converters` do Room (`TypeConverter` entre `List<Int>` e `String` separada por vírgulas).
+A navegação é feita com Navigation Compose, com uma barra inferior de 5 abas: Início, Músicas, Playlists, Favoritos e Top. As outras telas abrem a partir delas: o Perfil pelo avatar da Home, Planos e Histórico pelo Perfil, e os detalhes ao tocar num item das listas.
 
----
+Como funciona o Room no projeto:
 
-### 2. DAOs (`@Dao`)
-Criamos duas interfaces DAO anotadas com `@Dao`, todas utilizando `suspend fun`:
+Temos três entidades, todas com @PrimaryKey(autoGenerate = true) no id.
 
-* **`MusicaDao`**:
-  * `@Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun inserir(musica: Musica): Long`
-  * `@Query("SELECT * FROM musicas") suspend fun buscarTodos(): List<Musica>`
-  * `@Update suspend fun atualizar(musica: Musica): Int`
-  * `@Delete suspend fun deletar(musica: Musica): Int`
-  * **Consultas adicionais/filtradas:**
-    * `@Query("SELECT * FROM musicas WHERE id = :id") suspend fun buscarPorId(id: Int): Musica?` *(Requisito 3.3 - Tela de Detalhes lendo direto do banco pelo ID)*
-    * `@Query("SELECT * FROM musicas WHERE isFavorito = 1") suspend fun buscarFavoritos(): List<Musica>`
-    * `@Query("SELECT * FROM musicas ORDER BY reproducoes DESC") suspend fun buscarTopStats(): List<Musica>`
+A Musica (tabela musicas) tem título, artista, álbum, duração em segundos, gênero, isFavorito e reproducoes. Escolhemos esses campos porque eles dão conta de identificar a faixa, calcular as métricas e alimentar as telas de Favoritos e Top.
 
-* **`PlaylistDao`**:
-  * `@Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun inserir(playlist: Playlist): Long`
-  * `@Query("SELECT * FROM playlists") suspend fun buscarTodos(): List<Playlist>`
-  * `@Update suspend fun atualizar(playlist: Playlist): Int`
-  * `@Delete suspend fun deletar(playlist: Playlist): Int`
-  * **Consulta filtrada:**
-    * `@Query("SELECT * FROM playlists WHERE id = :id") suspend fun buscarPorId(id: Int): Playlist?`
+A Playlist (tabela playlists) tem nome, descrição e uma lista com os ids das músicas. A gente guardou só os ids pra não duplicar dado: a música existe uma vez só e a playlist aponta pra ela. Como o Room não salva List<Int> direto, criamos a classe Converters com @TypeConverter pra transformar a lista em texto separado por vírgula e voltar.
 
----
+A Plano (tabela planos) tem nome, tipo, preço, descrição da cobrança, economia, benefícios e isAtivo. Os benefícios usam o mesmo esquema de conversor (lista separada por ponto e vírgula), e o isAtivo é o que faz o plano escolhido continuar salvo.
 
-### 3. Banco de Dados (`AppDatabase`) e Padrão Singleton
-* Classe `abstract class AppDatabase : RoomDatabase()` anotada com `@Database(entities = [Musica::class, Playlist::class], version = 1)` e `@TypeConverters(Converters::class)`.
-* Implementa o padrão **Singleton** recomendado:
-  ```kotlin
-  companion object {
-      @Volatile
-      private var INSTANCE: AppDatabase? = null
+Cada entidade tem seu DAO (MusicaDao, PlaylistDao e PlanoDao), todos com os quatro métodos básicos como suspend fun: inserir, buscarTodos, atualizar e deletar. Além deles, criamos algumas consultas extras, deixando o filtro e a ordenação no SQL em vez de buscar tudo e filtrar na tela:
 
-      fun getDatabase(context: Context): AppDatabase {
-          return INSTANCE ?: synchronized(this) {
-              val instance = Room.databaseBuilder(
-                  context.applicationContext,
-                  AppDatabase::class.java,
-                  "escutai_database"
-              )
-              .fallbackToDestructiveMigration()
-              .build()
-              INSTANCE = instance
-              instance
-          }
-      }
-  }
-  ```
+- buscarPorId(id) nos três DAOs, usado pelos detalhes da música e da playlist pra ler direto do banco (é o requisito 3.3 do enunciado);
+- buscarFavoritos() na MusicaDao, com WHERE isFavorito = 1, usado na tela de Favoritos;
+- buscarTopStats() na MusicaDao, com ORDER BY reproducoes DESC, usado no Top Músicas;
+- buscarPlanoAtivo() na PlanoDao, com WHERE isAtivo = 1 LIMIT 1, pra saber qual plano está selecionado.
 
----
+O banco é a classe AppDatabase, uma abstract class que estende RoomDatabase, com version = 2 e as três entidades. Ela segue o padrão Singleton (companion object com @Volatile e synchronized) e é criada na MainActivity com AppRepository.init(this). Na primeira abertura, quando o banco está vazio, o app é populado com músicas, playlists e planos de exemplo.
 
-### 4. Execução Assíncrona e Coroutines (`Dispatchers.IO`)
-Nenhuma operação de banco é executada na thread principal (UI thread). Todas as chamadas ao DAO são gerenciadas pelo `AppRepository` ou chamadas no `LaunchedEffect(Unit)` / `rememberCoroutineScope()` através do `Dispatchers.IO`:
-```kotlin
-suspend fun carregarMusicas(): List<Musica> = withContext(Dispatchers.IO) {
-    try {
-        musicaDao.buscarTodos()
-    } catch (e: Exception) {
-        Log.e(TAG, "Erro ao carregar músicas do banco", e)
-        emptyList()
-    }
-}
-```
+Nenhuma operação de banco roda na thread principal. Os métodos dos DAOs são suspend, o AppRepository executa cada um dentro de withContext(Dispatchers.IO) e as telas chamam o repositório com coroutineScope.launch(Dispatchers.IO).
 
----
+Dificuldades que a gente teve:
 
-## 🔄 Dificuldades Encontradas e Como Resolvemos
+Sair do mutableStateListOf pro Room. No Trabalho 2 a lista era síncrona e a tela atualizava sozinha. Com o Room a leitura é assíncrona, então a lista começa vazia até o banco responder. A gente resolveu guardando a lista em remember { mutableStateOf(...) } em cada tela, buscando no banco com LaunchedEffect e atualizando o estado quando a consulta termina. Depois de inserir, editar ou remover, a tela busca de novo pra refletir a mudança. Também colocamos um isLoading pra tela não ficar piscando vazia.
 
-1. **Migração de `mutableStateListOf` em memória para Room Async State:**
-   * *Desafio:* No Trabalho 2, a UI dependia de mutabilidade síncrona de listas. Ao mudar para o Room, o carregamento do banco é assíncrono.
-   * *Solução:* Utilizamos `LaunchedEffect(Unit)` e `remember { mutableStateOf(...) }` em cada tela, disparando buscas no `Dispatchers.IO` e atualizando o estado do Compose assim que a busca encerra, garantindo que a tela renderize suavemente sem travar a UI.
+Edição de itens. O Trabalho 2 não tinha edição. Criamos diálogos (AlertDialog) de edição na Biblioteca de Músicas e na lista de Playlists. Ao salvar, o app faz um copy(...) do objeto e manda pro dao.atualizar(...).
 
-2. **Edição e Atualização de Itens (`dao.atualizar`):**
-   * *Desafio:* Precisávamos de um mecanismo de UI para permitir editar informações de itens cadastrados no banco.
-   * *Solução:* Adicionamos diálogos de edição modal (`AlertDialog`) nas telas de Biblioteca de Músicas e Lista de Playlists. Ao salvar, uma cópia atualizada do objeto é enviada ao `dao.atualizar(...)` no `Dispatchers.IO`.
+Playlist e música sem chave estrangeira. Como a playlist guarda só uma lista de ids, ao remover uma música o id dela ficaria dentro das playlists. Então o deletarMusica do repositório, depois de apagar a música, passa pelas playlists e tira aquele id de cada uma.
 
-3. **Incompatibilidade do KSP com gerações Java no AGP 9.3:**
-   * *Desafio:* Na compilação inicial com KSP + Kotlin 2.x, o Room gerou classes `.java` com assinaturas `Continuation` conflitantes.
-   * *Solução:* Configuramos o Room para gerar código nativo em Kotlin através da opção `ksp { arg("room.generateKotlin", "true") }` no `app/build.gradle.kts`.
+KSP com o AGP 9. Na primeira compilação com KSP e Kotlin 2.x, o Room gerou classes .java com assinaturas de Continuation conflitantes. Resolvemos configurando o Room pra gerar código em Kotlin, com ksp { arg("room.generateKotlin", "true") } no app/build.gradle.kts.
 
----
+Dificuldades de cada um:
 
-## 📱 Teste de Aceitação e Persistência
+Felipe: a maior dificuldade foi o Room não aceitar campos do tipo lista. Enquanto a Playlist tinha List<Int> e o Plano tinha List<String>, o projeto não compilava e o erro dizia que o Room não sabia como salvar aquele campo. Ele resolveu criando a classe Converters com @TypeConverter e lembrando de registrar ela no AppDatabase com @TypeConverters. Outro ponto foi montar os dados de exemplo do AppRepository: as playlists precisam dos ids reais das músicas, que só existem depois do insert, então ele passou a usar o Long que o inserir devolve pra montar as playlists com os ids certos.
 
-Para testar a persistência:
-1. Abra a **Biblioteca de Músicas** ou **Playlists** e adicione um novo item pelo formulário.
-2. O item é inserido via `dao.inserir(...)` e aparece imediatamente na lista.
-3. Feche e encerre o aplicativo completamente no gerenciador de tarefas do Android.
-4. Reabra o aplicativo: o item cadastrado permanece lá salvo no SQLite local!
+Gabriel: ele ficou com a parte do Gradle e teve que acertar a ordem dos plugins, já que o id do KSP precisa estar sincronizado antes de adicionar a linha do ksp(room-compiler), e ainda encarou o erro de geração de código do KSP com o AGP 9. Na tela de Detalhe da Música, o desafio foi que a busca por id devolve um valor que pode ser nulo e demora um pouco pra chegar. Ele tratou com o estado de carregando e com a mensagem de música não encontrada, e também precisou atualizar a tela depois de favoritar e de tocar a faixa, buscando a música de novo no banco.
 
----
+Mariana: no Detalhe da Playlist a tela precisa de três informações do banco ao mesmo tempo (a playlist, as músicas dela e a lista completa pra tela de adicionar), e no começo as métricas e a lista não atualizavam depois de adicionar ou remover uma música. Ela resolveu recarregando os três dados depois de cada alteração. Em Favoritos e Top Músicas, a dificuldade foi decidir entre filtrar na tela ou no banco, e ela acabou usando as consultas buscarFavoritos e buscarTopStats, deixando o filtro e a ordenação no SQL.
 
-## 🖥️ Como Rodar o Projeto
+Tecnologias:
 
-1. Abra o projeto no **Android Studio**.
-2. Aguarde o **Gradle Sync** (configurado com KSP e Room 2.6.1).
-3. Selecione um emulador AVD ou dispositivo físico com Android API 24+.
-4. Clique em **Run ▶️** (`Shift + F10`).
+Kotlin, Jetpack Compose com Material 3, Navigation Compose, Room 2.6.1 (room-runtime e room-ktx) com KSP (room-compiler), Coroutines, Material Icons Extended, Gradle 9.5 com Kotlin DSL e Android Gradle Plugin 9.x. O módulo usa minSdk 24, targetSdk 35, compileSdk 35 e Java 11.
 
----
+Estrutura do projeto:
 
-## 👥 Divisão de Tarefas da Equipe
+app/src/main/java/com/example/myapplication/
+├── MainActivity.kt          # Ponto de entrada (inicia o banco, tema e navegação)
+├── data/
+│   ├── AppRepository.kt     # Acesso ao banco (Dispatchers.IO + try/catch)
+│   └── db/
+│       ├── AppDatabase.kt   # Database do Room (Singleton)
+│       ├── Converters.kt    # TypeConverters (List<Int> e List<String>)
+│       ├── MusicaDao.kt
+│       ├── PlaylistDao.kt
+│       └── PlanoDao.kt
+├── model/
+│   ├── Musica.kt            # @Entity
+│   ├── Playlist.kt          # @Entity
+│   └── Plano.kt             # @Entity
+├── navigation/
+│   ├── AppNavigation.kt     # NavHost + barra inferior
+│   └── Rotas.kt
+└── ui/
+    ├── screens/             # Todas as telas
+    └── theme/               # Cores, tipografia e tema
 
-* **Felipe Kloss:** Estrutura das entidades Room (`Musica`, `Playlist`), `AppDatabase` Singleton, `Converters` e `AppRepository` assíncrono.
-* **Gabriel Asserman:** Configuração das dependências KSP/Room no Gradle, integração da `ListaMusicasScreen` e `DetalheMusicaScreen` (leitura por ID no banco).
-* **Mariana Almeida:** Integração da `ListaPlaylistsScreen`, `DetalhePlaylistScreen`, `FavoritosScreen` e `TopStatsScreen` para busca e manipulação persistente no Room.
+Como rodar:
+
+Você vai precisar de uma versão recente do Android Studio (o projeto usa AGP 9.x e Gradle 9.5, então vale usar a estável mais atual), do Android SDK 35 (o Android Studio oferece instalar sozinho ao abrir o projeto), de um emulador ou de um celular com depuração USB ativada (Android 7.0 / API 24 ou superior) e de internet na primeira execução, pra baixar as dependências.
+
+1. Clone o repositório: git clone https://github.com/<usuario>/<repositorio>.git
+2. No Android Studio, vá em File → Open e escolha a pasta do projeto.
+3. Espere o Gradle Sync terminar (na primeira vez pode demorar uns minutos, porque ele também roda o KSP do Room).
+4. Crie um emulador em Tools → Device Manager ou conecte seu celular.
+5. Selecione o dispositivo e clique em Run ▶️ (ou Shift + F10).
+
+Se der problema, o jeito é o de sempre (é Android Studio, né):
+
+- Erro de SDK: em Tools → SDK Manager, instale o Android SDK 35.
+- Erro de JDK: em Settings → Build, Execution, Deployment → Build Tools → Gradle, escolha o JDK embutido do Android Studio (jbr).
+- Sync falhando: confira a internet e use File → Sync Project with Gradle Files.
+- Dados estranhos no emulador: o banco usa fallbackToDestructiveMigration(), então mudar a versão apaga os dados. Pra começar do zero, desinstale o app ou use Clear Storage nas configurações dele.
+
+O que ainda não tem:
+
+Os botões de play não tocam áudio de verdade: eles só alternam entre tocando e pausado e aumentam o contador de execuções. O histórico de execuções ainda fica só na memória, então ele volta vazio quando o app fecha (músicas, playlists, favoritos, reproduções e plano escolhido são salvos no banco). Os planos VIP e o perfil são só demonstração, sem login nem pagamento. O banco é local, sem servidor, API ou sincronização na nuvem, como o enunciado pediu. E os botões de compartilhar, anterior, próxima, aleatório e repetir ainda não fazem nada.
+
+Equipe:
+
+- Felipe Kloss Conceição: telas de Perfil, Planos e Histórico; README e documentação. No Trabalho 3: entidades do Room (Musica e Playlist), AppDatabase Singleton, Converters e AppRepository.
+- Gabriel Asserman: tela Início, navegação (barra inferior e rotas), Biblioteca de Músicas, Detalhe da Música e Favoritos. No Trabalho 3: dependências KSP/Room no Gradle, integração da Biblioteca de Músicas e do Detalhe da Música (leitura por id no banco).
+- Mariana Almeida: Playlists, Detalhe da Playlist (métricas) e Top Músicas. No Trabalho 3: integração de Playlists, Detalhe da Playlist, Favoritos e Top Músicas com o Room.
+
+Prints das telas do App:
+
+<img width="392" height="865" alt="Print Tela 1" src="https://github.com/user-attachments/assets/7447f283-d888-40e9-b5eb-1eebaa29ea67" />
+<img width="400" height="855" alt="Print Tela 2" src="https://github.com/user-attachments/assets/92c9b888-b45c-4fd3-b2b2-13c9a9ec55a8" />
+<img width="391" height="863" alt="Print Tela 3" src="https://github.com/user-attachments/assets/e18e7d2f-9bf8-4e74-84c3-72ad42e156a4" />
+<img width="403" height="850" alt="Print Tela 4" src="https://github.com/user-attachments/assets/f509fee6-f8d5-494d-b9e3-b319221a06e0" />
+<img width="397" height="846" alt="Print Tela 8" src="https://github.com/user-attachments/assets/8fae3703-b78b-40ff-be17-ed5c41203922" />
+<img width="402" height="853" alt="Print Tela 7" src="https://github.com/user-attachments/assets/d7333775-573f-4299-9924-8fd995a6bad0" />
+<img width="385" height="851" alt="Print Tela 6" src="https://github.com/user-attachments/assets/cb84937b-d1d7-4107-9ec7-e83e47472849" />
+<img width="399" height="852" alt="Print Tela 5" src="https://github.com/user-attachments/assets/03f530d5-caaf-4b3e-8e8a-404f77cb3749" />
