@@ -2,6 +2,7 @@ package com.example.myapplication.data
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.example.myapplication.data.db.AppDatabase
 import com.example.myapplication.data.db.MusicaDao
 import com.example.myapplication.data.db.PlanoDao
@@ -14,6 +15,7 @@ import kotlinx.coroutines.withContext
 
 object AppRepository {
     private const val TAG = "AppRepository"
+    private var appContext: Context? = null
     private lateinit var database: AppDatabase
     private lateinit var musicaDao: MusicaDao
     private lateinit var playlistDao: PlaylistDao
@@ -23,6 +25,7 @@ object AppRepository {
 
     fun init(context: Context) {
         if (!::database.isInitialized) {
+            appContext = context.applicationContext
             database = AppDatabase.getDatabase(context)
             musicaDao = database.musicaDao()
             playlistDao = database.playlistDao()
@@ -30,20 +33,41 @@ object AppRepository {
         }
     }
 
+    private fun isSeedExecutado(): Boolean {
+        val prefs = appContext?.getSharedPreferences("escutai_prefs", Context.MODE_PRIVATE)
+        return prefs?.getBoolean("seed_executado", false) ?: false
+    }
+
+    private fun marcarSeedExecutado() {
+        appContext?.getSharedPreferences("escutai_prefs", Context.MODE_PRIVATE)
+            ?.edit { putBoolean("seed_executado", true) }
+    }
+
+    private suspend fun verificarEPreencherSeed() = withContext(Dispatchers.IO) {
+        if (isSeedExecutado()) return@withContext
+
+        val musicas = musicaDao.buscarTodos()
+        val playlists = playlistDao.buscarTodos()
+        val planos = planoDao.buscarTodos()
+
+        if (musicas.isEmpty() && playlists.isEmpty()) {
+            preencherDadosIniciais()
+        } else if (planos.isEmpty()) {
+            preencherPlanosIniciais()
+        }
+        marcarSeedExecutado()
+    }
+
     suspend fun carregarMusicas(): List<Musica> = withContext(Dispatchers.IO) {
         try {
+            verificarEPreencherSeed()
             val lista = musicaDao.buscarTodos()
-            if (lista.isEmpty()) {
-                preencherDadosIniciais()
+            val invalidos = lista.filter { it.titulo.isBlank() || it.artista.isBlank() }
+            if (invalidos.isNotEmpty()) {
+                invalidos.forEach { musicaDao.deletar(it) }
                 musicaDao.buscarTodos()
             } else {
-                val invalidos = lista.filter { it.titulo.isBlank() || it.artista.isBlank() }
-                if (invalidos.isNotEmpty()) {
-                    invalidos.forEach { musicaDao.deletar(it) }
-                    musicaDao.buscarTodos()
-                } else {
-                    lista
-                }
+                lista
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao carregar músicas do banco", e)
@@ -53,18 +77,14 @@ object AppRepository {
 
     suspend fun carregarPlaylists(): List<Playlist> = withContext(Dispatchers.IO) {
         try {
+            verificarEPreencherSeed()
             val lista = playlistDao.buscarTodos()
-            if (lista.isEmpty()) {
-                preencherDadosIniciais()
+            val invalidas = lista.filter { it.nome.isBlank() }
+            if (invalidas.isNotEmpty()) {
+                invalidas.forEach { playlistDao.deletar(it) }
                 playlistDao.buscarTodos()
             } else {
-                val invalidas = lista.filter { it.nome.isBlank() }
-                if (invalidas.isNotEmpty()) {
-                    invalidas.forEach { playlistDao.deletar(it) }
-                    playlistDao.buscarTodos()
-                } else {
-                    lista
-                }
+                lista
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao carregar playlists do banco", e)
@@ -74,6 +94,7 @@ object AppRepository {
 
     suspend fun carregarPlanos(): List<Plano> = withContext(Dispatchers.IO) {
         try {
+            verificarEPreencherSeed()
             val lista = planoDao.buscarTodos()
             if (lista.isEmpty()) {
                 preencherPlanosIniciais()

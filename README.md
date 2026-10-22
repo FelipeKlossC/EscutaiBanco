@@ -39,9 +39,9 @@ Cada entidade tem seu DAO (MusicaDao, PlaylistDao e PlanoDao), todos com os quat
 - buscarTopStats() na MusicaDao, com ORDER BY reproducoes DESC, usado no Top Músicas;
 - buscarPlanoAtivo() na PlanoDao, com WHERE isAtivo = 1 LIMIT 1, pra saber qual plano está selecionado.
 
-O banco é a classe AppDatabase, uma abstract class que estende RoomDatabase, com version = 2 e as três entidades. Ela segue o padrão Singleton (companion object com @Volatile e synchronized) e é criada na MainActivity com AppRepository.init(this). Na primeira abertura, quando o banco está vazio, o app é populado com músicas, playlists e planos de exemplo.
+O banco é a classe AppDatabase, uma abstract class que estende RoomDatabase, com version = 2 e as três entidades. Ela segue o padrão Singleton (companion object com @Volatile e synchronized) e é criada na MainActivity com AppRepository.init(this). Na primeira abertura, quando o banco está vazio, o app é populado com músicas, playlists e planos de exemplo (utilizando uma flag persistida via SharedPreferences para garantir que a carga inicial execute uma única vez e não reapareça nem duplique dados caso o usuário remova todas as músicas ou playlists durante o uso).
 
-Nenhuma operação de banco roda na thread principal. Os métodos dos DAOs são suspend, o AppRepository executa cada um dentro de withContext(Dispatchers.IO) e as telas chamam o repositório com coroutineScope.launch(Dispatchers.IO).
+Nenhuma operação de banco roda na thread principal. Os métodos dos DAOs são suspend, o AppRepository executa cada um dentro de withContext(Dispatchers.IO) e as telas chamam o repositório com rememberCoroutineScope().launch ou LaunchedEffect. Embora o enunciado mencione a sintaxe CoroutineScope(Dispatchers.IO).launch, optamos por utilizar withContext(Dispatchers.IO) diretamente nas rotinas do repositório em conjunto com o escopo do Compose. Na prática o resultado é idêntico: 100% das chamadas de leitura/escrita no banco são executadas no contexto de I/O do sistema, garantindo que nenhuma operação trave a Main Thread.
 
 Dificuldades que a gente teve:
 
@@ -103,11 +103,11 @@ Se der problema, o jeito é o de sempre (é Android Studio, né):
 - Erro de SDK: em Tools → SDK Manager, instale o Android SDK 35.
 - Erro de JDK: em Settings → Build, Execution, Deployment → Build Tools → Gradle, escolha o JDK embutido do Android Studio (jbr).
 - Sync falhando: confira a internet e use File → Sync Project with Gradle Files.
-- Dados estranhos no emulador: o banco usa fallbackToDestructiveMigration(), então mudar a versão apaga os dados. Pra começar do zero, desinstale o app ou use Clear Storage nas configurações dele.
+- Dados estranhos no emulador: o banco usa fallbackToDestructiveMigration(), portanto se a versão do schema for alterada sem uma migração explícita, o Room apaga as tabelas antigas e recria o banco do zero (comportamento intencional no ambiente de desenvolvimento para evitar falhas por incompatibilidade de schema). Pra começar do zero manualmente, desinstale o app ou use Clear Storage nas configurações dele.
 
 O que ainda não tem:
 
-Os botões de play não tocam áudio de verdade: eles só alternam entre tocando e pausado e aumentam o contador de execuções. O histórico de execuções ainda fica só na memória, então ele volta vazio quando o app fecha (músicas, playlists, favoritos, reproduções e plano escolhido são salvos no banco). Os planos VIP e o perfil são só demonstração, sem login nem pagamento. O banco é local, sem servidor, API ou sincronização na nuvem, como o enunciado pediu. E os botões de compartilhar, anterior, próxima, aleatório e repetir ainda não fazem nada.
+Os botões de play não tocam áudio de verdade: eles só alternam entre tocando e pausado e aumentam o contador de execuções. O histórico de execuções (historicoMusicas) é mantido apenas em memória durante a sessão e não é uma entidade persistida no Room, portanto ele volta vazio ao fechar e reabrir o app (músicas, playlists, favoritos, reproduções e o plano ativo são persistidos e mantidos no banco de dados). Os planos VIP e o perfil são só demonstração, sem login nem pagamento. O banco é local, sem servidor, API ou sincronização na nuvem, como o enunciado pediu. E os botões de compartilhar, anterior, próxima, aleatório e repetir ainda não fazem nada.
 
 Equipe:
 
