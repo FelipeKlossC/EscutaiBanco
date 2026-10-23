@@ -16,29 +16,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
 import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val playlistDao = db.playlistDao()
+
     var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentProgress by remember { mutableFloatStateOf(0.35f) }
 
     LaunchedEffect(Unit) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val dados = AppRepository.carregarPlaylists()
-            playlists = dados
+        CoroutineScope(Dispatchers.IO).launch {
+            playlists = buscarPlaylists(playlistDao)
         }
     }
 
@@ -233,10 +237,11 @@ fun HomeScreen(navController: NavController) {
                     navController.navigate(Rotas.detalhePlaylist(primeiraPlaylist.id))
                 }
             },
+            enabled = playlists.isNotEmpty(),
             modifier = Modifier.align(Alignment.CenterHorizontally)
         ) {
             Text(
-                text = "abrir essa playlist",
+                text = if (playlists.isNotEmpty()) "abrir essa playlist" else "nenhuma playlist criada",
                 color = Color.Gray,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
@@ -264,57 +269,66 @@ fun HomeScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            playlists.take(2).forEach { playlist ->
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .clickable { navController.navigate(Rotas.detalhePlaylist(playlist.id)) }
-                ) {
-                    Row(
+            if (playlists.isEmpty()) {
+                Text(
+                    text = "Nenhuma playlist cadastrada ainda.",
+                    color = Color.Gray,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                playlists.take(2).forEach { playlist ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(vertical = 6.dp)
+                            .clickable { navController.navigate(Rotas.detalhePlaylist(playlist.id)) }
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF5B0E5B)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = "Nota Musical",
-                                    tint = Color.White
-                                )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF5B0E5B)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = "Nota Musical",
+                                        tint = Color.White
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = playlist.nome,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "${playlist.listaDeIds().size} faixas",
+                                        fontSize = 13.sp,
+                                        color = Color.LightGray
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = playlist.nome,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "${playlist.musicasIds.size} faixas",
-                                    fontSize = 13.sp,
-                                    color = Color.LightGray
-                                )
-                            }
+                            Text(
+                                text = "${playlist.listaDeIds().size}",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
-                        Text(
-                            text = "${playlist.musicasIds.size}",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
                     }
                 }
             }

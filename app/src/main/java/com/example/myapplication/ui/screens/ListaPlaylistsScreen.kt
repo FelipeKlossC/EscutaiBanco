@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,20 +13,60 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
+import com.example.myapplication.data.db.PlaylistDao
 import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// funções soltas (top-level), suspend, com try/catch e Log.e
+suspend fun buscarPlaylists(playlistDao: PlaylistDao): List<Playlist> {
+    return try {
+        playlistDao.buscarTodos()
+    } catch (e: Exception) {
+        Log.e("Erro ao buscar", "Msg: ${e.message}")
+        emptyList()
+    }
+}
+
+suspend fun inserirPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
+    try {
+        playlistDao.inserir(playlist)
+    } catch (e: Exception) {
+        Log.e("Erro ao inserir", "Msg: ${e.message}")
+    }
+}
+
+suspend fun atualizarPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
+    try {
+        playlistDao.atualizar(playlist)
+    } catch (e: Exception) {
+        Log.e("Erro ao atualizar", "Msg: ${e.message}")
+    }
+}
+
+suspend fun deletarPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
+    try {
+        playlistDao.deletar(playlist)
+    } catch (e: Exception) {
+        Log.e("Erro ao deletar", "Msg: ${e.message}")
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListaPlaylistsScreen(navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val playlistDao = db.playlistDao()
+
     var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -37,16 +78,11 @@ fun ListaPlaylistsScreen(navController: NavController) {
     var editNome by remember { mutableStateOf("") }
     var editDescricao by remember { mutableStateOf("") }
 
-    fun atualizarLista() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val dados = AppRepository.carregarPlaylists()
-            playlists = dados
+    LaunchedEffect(Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            playlists = buscarPlaylists(playlistDao)
             isLoading = false
         }
-    }
-
-    LaunchedEffect(Unit) {
-        atualizarLista()
     }
 
     Scaffold(
@@ -133,14 +169,15 @@ fun ListaPlaylistsScreen(navController: NavController) {
                                 descricao = ""
                                 erroFormulario = false
 
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    AppRepository.adicionarPlaylist(
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    inserirPlaylist(
                                         Playlist(
                                             nome = n,
                                             descricao = desc
-                                        )
+                                        ),
+                                        playlistDao
                                     )
-                                    atualizarLista()
+                                    playlists = buscarPlaylists(playlistDao)
                                 }
                             } else {
                                 erroFormulario = true
@@ -208,7 +245,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                                         color = Color.LightGray
                                     )
                                     Text(
-                                        text = "${playlist.musicasIds.size} músicas na lista",
+                                        text = "${playlist.listaDeIds().size} músicas na lista",
                                         fontSize = 12.sp,
                                         color = Color(0xFFE0AAFF),
                                         modifier = Modifier.padding(top = 4.dp)
@@ -229,9 +266,9 @@ fun ListaPlaylistsScreen(navController: NavController) {
                                     }
 
                                     IconButton(onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            AppRepository.deletarPlaylist(playlist)
-                                            atualizarLista()
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            deletarPlaylist(playlist, playlistDao)
+                                            playlists = buscarPlaylists(playlistDao)
                                         }
                                     }) {
                                         Icon(
@@ -282,9 +319,9 @@ fun ListaPlaylistsScreen(navController: NavController) {
                         )
                         playlistParaEditar = null
 
-                        coroutineScope.launch(Dispatchers.IO) {
-                            AppRepository.atualizarPlaylist(playlistAtualizada)
-                            atualizarLista()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            atualizarPlaylist(playlistAtualizada, playlistDao)
+                            playlists = buscarPlaylists(playlistDao)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88))

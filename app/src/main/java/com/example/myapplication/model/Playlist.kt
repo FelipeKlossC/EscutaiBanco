@@ -1,7 +1,7 @@
 package com.example.myapplication.model
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
 
 @Entity(tableName = "playlists")
 data class Playlist(
@@ -9,5 +9,10 @@ data class Playlist(
     val id: Int = 0,
     val nome: String,
     val descricao: String,
-    val musicasIds: List<Int> = emptyList()
-)
+    val musicasIds: String = ""
+) {
+    fun listaDeIds(): List<Int> {
+        if (musicasIds.isBlank()) return emptyList()
+        return musicasIds.split(",").mapNotNull { it.trim().toIntOrNull() }
+    }
+}

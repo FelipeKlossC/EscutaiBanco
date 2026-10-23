@@ -16,13 +16,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.model.Musica
 import com.example.myapplication.navigation.Rotas
+
+val historicoMusicas = mutableListOf<Musica>()
+
+fun registrarNoHistorico(musica: Musica) {
+    if (historicoMusicas.firstOrNull()?.id != musica.id) {
+        historicoMusicas.add(0, musica)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoricoScreen(navController: NavController) {
-    val historico = AppRepository.historicoMusicas
+    val historico = historicoMusicas
 
     Scaffold(
         topBar = {
@@ -79,7 +87,7 @@ fun HistoricoScreen(navController: NavController) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    AppRepository.registrarNoHistorico(musica)
+                                    registrarNoHistorico(musica)
                                     navController.navigate(Rotas.detalheMusica(musica.id))
                                 }
                         ) {

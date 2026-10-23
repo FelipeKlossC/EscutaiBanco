@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,41 +13,82 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
+import com.example.myapplication.data.db.MusicaDao
+import com.example.myapplication.data.db.PlaylistDao
 import com.example.myapplication.model.Musica
 import com.example.myapplication.model.Playlist
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// funções soltas (top-level), suspend, com try/catch e Log.e
+suspend fun buscarPlaylistPorId(id: Int, playlistDao: PlaylistDao): Playlist? {
+    return try {
+        playlistDao.buscarPorId(id)
+    } catch (e: Exception) {
+        Log.e("Erro ao buscar por id", "Msg: ${e.message}")
+        null
+    }
+}
+
+suspend fun adicionarMusicaNaPlaylist(playlistId: Int, musicaId: Int, playlistDao: PlaylistDao) {
+    try {
+        val playlist = playlistDao.buscarPorId(playlistId)
+        if (playlist != null && musicaId !in playlist.listaDeIds()) {
+            val novaLista = playlist.listaDeIds() + musicaId
+            playlistDao.atualizar(playlist.copy(musicasIds = novaLista.joinToString(",")))
+        }
+    } catch (e: Exception) {
+        Log.e("Erro ao adicionar", "Msg: ${e.message}")
+    }
+}
+
+suspend fun removerMusicaDaPlaylist(playlistId: Int, musicaId: Int, playlistDao: PlaylistDao) {
+    try {
+        val playlist = playlistDao.buscarPorId(playlistId)
+        if (playlist != null && musicaId in playlist.listaDeIds()) {
+            val novaLista = playlist.listaDeIds().filter { it != musicaId }
+            playlistDao.atualizar(playlist.copy(musicasIds = novaLista.joinToString(",")))
+        }
+    } catch (e: Exception) {
+        Log.e("Erro ao remover", "Msg: ${e.message}")
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val musicaDao = db.musicaDao()
+    val playlistDao = db.playlistDao()
+
     var playlist by remember { mutableStateOf<Playlist?>(null) }
     var musicasDaPlaylist by remember { mutableStateOf<List<Musica>>(emptyList()) }
     var todasMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showDialogAdicionarMusica by remember { mutableStateOf(false) }
 
-    fun carregarDados() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val p = AppRepository.buscarPlaylistPorId(playlistId)
-            val musicas = AppRepository.obterMusicasDaPlaylist(playlistId)
-            val todas = AppRepository.carregarMusicas()
+    fun recarregar() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val p = buscarPlaylistPorId(playlistId, playlistDao)
+            val todas = buscarMusicas(musicaDao)
             playlist = p
-            musicasDaPlaylist = musicas
             todasMusicas = todas
+            musicasDaPlaylist = if (p != null) todas.filter { it.id in p.listaDeIds() } else emptyList()
             isLoading = false
         }
     }
 
     LaunchedEffect(playlistId) {
-        carregarDados()
+        recarregar()
     }
 
     Scaffold(
@@ -188,9 +230,9 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                     }
                                     IconButton(
                                         onClick = {
-                                            coroutineScope.launch(Dispatchers.IO) {
-                                                AppRepository.removerMusicaDaPlaylist(playlistId, musica.id)
-                                                carregarDados()
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                removerMusicaDaPlaylist(playlistId, musica.id, playlistDao)
+                                                recarregar()
                                             }
                                         }
                                     ) {
@@ -210,7 +252,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
     }
 
     if (showDialogAdicionarMusica && playlist != null) {
-        val musicasForaDaPlaylist = todasMusicas.filter { it.id !in playlist!!.musicasIds }
+        val musicasForaDaPlaylist = todasMusicas.filter { it.id !in (playlist?.listaDeIds() ?: emptyList()) }
 
         AlertDialog(
             onDismissRequest = { showDialogAdicionarMusica = false },
@@ -226,9 +268,9 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            AppRepository.adicionarMusicaAPlaylist(playlistId, m.id)
-                                            carregarDados()
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            adicionarMusicaNaPlaylist(playlistId, m.id, playlistDao)
+                                            recarregar()
                                         }
                                         showDialogAdicionarMusica = false
                                     }

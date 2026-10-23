@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,21 +14,79 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
+import com.example.myapplication.data.db.MusicaDao
+import com.example.myapplication.data.db.PlaylistDao
 import com.example.myapplication.model.Musica
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// funções soltas (top-level), suspend, com try/catch e Log.e
+suspend fun buscarMusicas(musicaDao: MusicaDao): List<Musica> {
+    return try {
+        musicaDao.buscarTodos()
+    } catch (e: Exception) {
+        Log.e("Erro ao buscar", "Msg: ${e.message}")
+        emptyList()
+    }
+}
+
+suspend fun inserirMusica(musica: Musica, musicaDao: MusicaDao) {
+    try {
+        musicaDao.inserir(musica)
+    } catch (e: Exception) {
+        Log.e("Erro ao inserir", "Msg: ${e.message}")
+    }
+}
+
+suspend fun atualizarMusica(musica: Musica, musicaDao: MusicaDao) {
+    try {
+        musicaDao.atualizar(musica)
+    } catch (e: Exception) {
+        Log.e("Erro ao atualizar", "Msg: ${e.message}")
+    }
+}
+
+suspend fun alternarFavorito(musica: Musica, musicaDao: MusicaDao) {
+    try {
+        musicaDao.atualizar(musica.copy(isFavorito = !musica.isFavorito))
+    } catch (e: Exception) {
+        Log.e("Erro ao alternar favorito", "Msg: ${e.message}")
+    }
+}
+
+suspend fun deletarMusica(musica: Musica, musicaDao: MusicaDao, playlistDao: PlaylistDao) {
+    try {
+        musicaDao.deletar(musica)
+        val playlists = playlistDao.buscarTodos()
+        for (pl in playlists) {
+            if (musica.id in pl.listaDeIds()) {
+                val novaLista = pl.listaDeIds().filter { it != musica.id }
+                playlistDao.atualizar(pl.copy(musicasIds = novaLista.joinToString(",")))
+            }
+        }
+        historicoMusicas.removeAll { it.id == musica.id }
+    } catch (e: Exception) {
+        Log.e("Erro ao deletar", "Msg: ${e.message}")
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListaMusicasScreen(navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val musicaDao = db.musicaDao()
+    val playlistDao = db.playlistDao()
+
     var listaMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -43,16 +102,11 @@ fun ListaMusicasScreen(navController: NavController) {
     var editDuracao by remember { mutableStateOf("") }
     var editGenero by remember { mutableStateOf("") }
 
-    fun atualizarLista() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val dados = AppRepository.carregarMusicas()
-            listaMusicas = dados
+    LaunchedEffect(Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            listaMusicas = buscarMusicas(musicaDao)
             isLoading = false
         }
-    }
-
-    LaunchedEffect(Unit) {
-        atualizarLista()
     }
 
     Scaffold(
@@ -172,17 +226,18 @@ fun ListaMusicasScreen(navController: NavController) {
                                 genero = ""
                                 erroFormulario = false
 
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    AppRepository.adicionarMusica(
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    inserirMusica(
                                         Musica(
                                             titulo = t,
                                             artista = a,
                                             album = "Single",
                                             duracaoSegundos = durSeg,
                                             genero = g
-                                        )
+                                        ),
+                                        musicaDao
                                     )
-                                    atualizarLista()
+                                    listaMusicas = buscarMusicas(musicaDao)
                                 }
                             } else {
                                 erroFormulario = true
@@ -279,9 +334,9 @@ fun ListaMusicasScreen(navController: NavController) {
                                     }
 
                                     IconButton(onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            AppRepository.toggleFavorito(musica)
-                                            atualizarLista()
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            alternarFavorito(musica, musicaDao)
+                                            listaMusicas = buscarMusicas(musicaDao)
                                         }
                                     }) {
                                         Icon(
@@ -292,9 +347,9 @@ fun ListaMusicasScreen(navController: NavController) {
                                     }
 
                                     IconButton(onClick = {
-                                        coroutineScope.launch(Dispatchers.IO) {
-                                            AppRepository.deletarMusica(musica)
-                                            atualizarLista()
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            deletarMusica(musica, musicaDao, playlistDao)
+                                            listaMusicas = buscarMusicas(musicaDao)
                                         }
                                     }) {
                                         Icon(
@@ -362,9 +417,9 @@ fun ListaMusicasScreen(navController: NavController) {
                         )
                         musicaParaEditar = null
 
-                        coroutineScope.launch(Dispatchers.IO) {
-                            AppRepository.atualizarMusica(musicaAtualizada)
-                            atualizarLista()
+                        CoroutineScope(Dispatchers.IO).launch {
+                            atualizarMusica(musicaAtualizada, musicaDao)
+                            listaMusicas = buscarMusicas(musicaDao)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88))

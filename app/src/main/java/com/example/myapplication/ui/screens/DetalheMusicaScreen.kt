@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,30 +13,46 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
+import com.example.myapplication.data.db.MusicaDao
 import com.example.myapplication.model.Musica
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+
+// funções soltas (top-level), suspend, com try/catch e Log.e
+suspend fun buscarMusicaPorId(id: Int, musicaDao: MusicaDao): Musica? {
+    return try {
+        musicaDao.buscarPorId(id)
+    } catch (e: Exception) {
+        Log.e("Erro ao buscar por id", "Msg: ${e.message}")
+        null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val musicaDao = db.musicaDao()
+
     var musica by remember { mutableStateOf<Musica?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
 
     LaunchedEffect(musicaId) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val item = AppRepository.buscarMusicaPorId(musicaId)
+        CoroutineScope(Dispatchers.IO).launch {
+            val item = buscarMusicaPorId(musicaId, musicaDao)
             musica = item
             isLoading = false
             if (item != null) {
-                AppRepository.registrarNoHistorico(item)
+                registrarNoHistorico(item)
             }
         }
     }
@@ -167,9 +184,9 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = {
-                        coroutineScope.launch(Dispatchers.IO) {
-                            AppRepository.toggleFavorito(itemMusica)
-                            musica = AppRepository.buscarMusicaPorId(musicaId)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            alternarFavorito(itemMusica, musicaDao)
+                            musica = buscarMusicaPorId(musicaId, musicaDao)
                         }
                     }) {
                         Icon(
@@ -184,9 +201,9 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                         onClick = {
                             isPlaying = !isPlaying
                             if (isPlaying) {
-                                coroutineScope.launch(Dispatchers.IO) {
+                                CoroutineScope(Dispatchers.IO).launch {
                                     val musicaAtualizada = itemMusica.copy(reproducoes = itemMusica.reproducoes + 1)
-                                    AppRepository.atualizarMusica(musicaAtualizada)
+                                    atualizarMusica(musicaAtualizada, musicaDao)
                                     musica = musicaAtualizada
                                 }
                             }

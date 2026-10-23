@@ -14,26 +14,32 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerfilScreen(navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val musicaDao = db.musicaDao()
+    val playlistDao = db.playlistDao()
+
     var totalMusicas by remember { mutableIntStateOf(0) }
     var totalPlaylists by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val musicas = AppRepository.carregarMusicas()
-            val playlists = AppRepository.carregarPlaylists()
+        CoroutineScope(Dispatchers.IO).launch {
+            val musicas = buscarMusicas(musicaDao)
+            val playlists = buscarPlaylists(playlistDao)
             totalMusicas = musicas.size
             totalPlaylists = playlists.size
         }
@@ -147,7 +153,7 @@ fun PerfilScreen(navController: NavController) {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Histórico de Execuções", color = Color.Gray)
-                        Text("${AppRepository.historicoMusicas.size} músicas", color = Color(0xFFD946EF), fontWeight = FontWeight.Bold)
+                        Text("${historicoMusicas.size} músicas", color = Color(0xFFD946EF), fontWeight = FontWeight.Bold)
                     }
                 }
             }

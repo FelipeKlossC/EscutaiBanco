@@ -12,33 +12,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.data.AppRepository
+import com.example.myapplication.data.db.AppDatabase
 import com.example.myapplication.model.Musica
 import com.example.myapplication.navigation.Rotas
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritosScreen(navController: NavController) {
-    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val db = AppDatabase.getDatabase(context)
+    val musicaDao = db.musicaDao()
+
     var musicasFavoritas by remember { mutableStateOf<List<Musica>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    fun carregarFavoritos() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val favs = AppRepository.buscarFavoritos()
-            musicasFavoritas = favs
+    LaunchedEffect(Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            musicasFavoritas = buscarMusicas(musicaDao).filter { it.isFavorito }
             isLoading = false
         }
-    }
-
-    LaunchedEffect(Unit) {
-        carregarFavoritos()
     }
 
     Scaffold(
@@ -127,9 +127,9 @@ fun FavoritosScreen(navController: NavController) {
                                 }
 
                                 IconButton(onClick = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        AppRepository.toggleFavorito(musica)
-                                        carregarFavoritos()
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        alternarFavorito(musica, musicaDao)
+                                        musicasFavoritas = buscarMusicas(musicaDao).filter { it.isFavorito }
                                     }
                                 }) {
                                     Icon(
