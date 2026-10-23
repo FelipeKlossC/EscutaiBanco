@@ -28,7 +28,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// funções soltas (top-level), suspend, com try/catch e Log.e
 suspend fun buscarPlaylistPorId(id: Int, playlistDao: PlaylistDao): Playlist? {
     return try {
         playlistDao.buscarPorId(id)
