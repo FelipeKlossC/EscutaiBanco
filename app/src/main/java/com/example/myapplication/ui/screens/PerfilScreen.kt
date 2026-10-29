@@ -18,32 +18,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.example.myapplication.viewmodel.MusicaViewModel
+import com.example.myapplication.viewmodel.MusicaViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PerfilScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val musicaDao = db.musicaDao()
-    val playlistDao = db.playlistDao()
-
-    var totalMusicas by remember { mutableIntStateOf(0) }
-    var totalPlaylists by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val musicas = buscarMusicas(musicaDao)
-            val playlists = buscarPlaylists(playlistDao)
-            totalMusicas = musicas.size
-            totalPlaylists = playlists.size
-        }
-    }
+fun PerfilScreen(
+    navController: NavController,
+    viewModel: MusicaViewModel = viewModel(
+        factory = MusicaViewModelFactory(
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao()),
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val totalMusicas = uiState.totalMusicas
+    val totalPlaylists = uiState.totalPlaylists
 
     Scaffold(
         topBar = {

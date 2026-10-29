@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.screens
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,72 +16,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.data.db.PlaylistDao
-import com.example.myapplication.model.Playlist
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-suspend fun buscarPlaylists(playlistDao: PlaylistDao): List<Playlist> {
-    return try {
-        playlistDao.buscarTodos()
-    } catch (e: Exception) {
-        Log.e("Erro ao buscar", "Msg: ${e.message}")
-        emptyList()
-    }
-}
-
-suspend fun inserirPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
-    try {
-        playlistDao.inserir(playlist)
-    } catch (e: Exception) {
-        Log.e("Erro ao inserir", "Msg: ${e.message}")
-    }
-}
-
-suspend fun atualizarPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
-    try {
-        playlistDao.atualizar(playlist)
-    } catch (e: Exception) {
-        Log.e("Erro ao atualizar", "Msg: ${e.message}")
-    }
-}
-
-suspend fun deletarPlaylist(playlist: Playlist, playlistDao: PlaylistDao) {
-    try {
-        playlistDao.deletar(playlist)
-    } catch (e: Exception) {
-        Log.e("Erro ao deletar", "Msg: ${e.message}")
-    }
-}
+import com.example.myapplication.viewmodel.PlaylistViewModel
+import com.example.myapplication.viewmodel.PlaylistViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListaPlaylistsScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val playlistDao = db.playlistDao()
-
-    var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    var nome by remember { mutableStateOf("") }
-    var descricao by remember { mutableStateOf("") }
-    var erroFormulario by remember { mutableStateOf(false) }
-
-    var playlistParaEditar by remember { mutableStateOf<Playlist?>(null) }
-    var editNome by remember { mutableStateOf("") }
-    var editDescricao by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            playlists = buscarPlaylists(playlistDao)
-            isLoading = false
-        }
-    }
+fun ListaPlaylistsScreen(
+    navController: NavController,
+    viewModel: PlaylistViewModel = viewModel(
+        factory = PlaylistViewModelFactory(
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao()),
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -121,8 +76,8 @@ fun ListaPlaylistsScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(10.dp))
 
                     OutlinedTextField(
-                        value = nome,
-                        onValueChange = { nome = it },
+                        value = uiState.nome,
+                        onValueChange = { viewModel.onNomeChange(it) },
                         label = { Text("Nome da Playlist") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -135,8 +90,8 @@ fun ListaPlaylistsScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
-                        value = descricao,
-                        onValueChange = { descricao = it },
+                        value = uiState.descricao,
+                        onValueChange = { viewModel.onDescricaoChange(it) },
                         label = { Text("Descrição") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -147,7 +102,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                         )
                     )
 
-                    if (erroFormulario) {
+                    if (uiState.erroFormulario) {
                         Text(
                             text = "Insira um nome válido para a playlist!",
                             color = Color.Red,
@@ -159,29 +114,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
-                        onClick = {
-                            val n = nome.trim()
-                            val desc = if (descricao.isBlank()) "Playlist personalizada" else descricao.trim()
-
-                            if (n.isNotBlank()) {
-                                nome = ""
-                                descricao = ""
-                                erroFormulario = false
-
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    inserirPlaylist(
-                                        Playlist(
-                                            nome = n,
-                                            descricao = desc
-                                        ),
-                                        playlistDao
-                                    )
-                                    playlists = buscarPlaylists(playlistDao)
-                                }
-                            } else {
-                                erroFormulario = true
-                            }
-                        },
+                        onClick = { viewModel.onAdicionar() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88)),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -194,18 +127,18 @@ fun ListaPlaylistsScreen(navController: NavController) {
             }
 
             Text(
-                text = "Playlists Disponíveis (${playlists.size})",
+                text = "Playlists Disponíveis (${uiState.listaDePlaylists.size})",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            if (isLoading) {
+            if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color(0xFFD946EF))
                 }
-            } else if (playlists.isEmpty()) {
+            } else if (uiState.listaDePlaylists.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Nenhuma playlist criada no banco.", color = Color.Gray)
                 }
@@ -214,7 +147,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(playlists, key = { it.id }) { playlist ->
+                    items(uiState.listaDePlaylists, key = { it.id }) { playlist ->
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF8A1B88)),
@@ -252,11 +185,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = {
-                                        playlistParaEditar = playlist
-                                        editNome = playlist.nome
-                                        editDescricao = playlist.descricao
-                                    }) {
+                                    IconButton(onClick = { viewModel.onEditar(playlist) }) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Editar Playlist",
@@ -264,12 +193,7 @@ fun ListaPlaylistsScreen(navController: NavController) {
                                         )
                                     }
 
-                                    IconButton(onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            deletarPlaylist(playlist, playlistDao)
-                                            playlists = buscarPlaylists(playlistDao)
-                                        }
-                                    }) {
+                                    IconButton(onClick = { viewModel.onDelete(playlist) }) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,
                                             contentDescription = "Excluir Playlist",
@@ -285,22 +209,22 @@ fun ListaPlaylistsScreen(navController: NavController) {
         }
     }
 
-    playlistParaEditar?.let { playlist ->
+    uiState.playlistEmEdicao?.let { _ ->
         AlertDialog(
-            onDismissRequest = { playlistParaEditar = null },
+            onDismissRequest = { viewModel.onCancelarEdicao() },
             title = { Text("Editar Playlist", color = Color.White) },
             containerColor = Color(0xFF1E1A3A),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = editNome,
-                        onValueChange = { editNome = it },
+                        value = uiState.editNome,
+                        onValueChange = { viewModel.onEditNomeChange(it) },
                         label = { Text("Nome da Playlist") },
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
                     OutlinedTextField(
-                        value = editDescricao,
-                        onValueChange = { editDescricao = it },
+                        value = uiState.editDescricao,
+                        onValueChange = { viewModel.onEditDescricaoChange(it) },
                         label = { Text("Descrição") },
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
@@ -308,28 +232,14 @@ fun ListaPlaylistsScreen(navController: NavController) {
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        val n = editNome.trim().ifBlank { playlist.nome }
-                        val desc = editDescricao.trim().ifBlank { playlist.descricao }
-
-                        val playlistAtualizada = playlist.copy(
-                            nome = n,
-                            descricao = desc
-                        )
-                        playlistParaEditar = null
-
-                        CoroutineScope(Dispatchers.IO).launch {
-                            atualizarPlaylist(playlistAtualizada, playlistDao)
-                            playlists = buscarPlaylists(playlistDao)
-                        }
-                    },
+                    onClick = { viewModel.onSalvarEdicao() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88))
                 ) {
                     Text("Salvar no Banco")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { playlistParaEditar = null }) {
+                TextButton(onClick = { viewModel.onCancelarEdicao() }) {
                     Text("Cancelar", color = Color.Gray)
                 }
             }

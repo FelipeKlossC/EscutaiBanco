@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.screens
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,83 +16,38 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.data.db.MusicaDao
-import com.example.myapplication.data.db.PlaylistDao
-import com.example.myapplication.model.Musica
-import com.example.myapplication.model.Playlist
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-suspend fun buscarPlaylistPorId(id: Int, playlistDao: PlaylistDao): Playlist? {
-    return try {
-        playlistDao.buscarPorId(id)
-    } catch (e: Exception) {
-        Log.e("Erro ao buscar por id", "Msg: ${e.message}")
-        null
-    }
-}
-
-suspend fun adicionarMusicaNaPlaylist(playlistId: Int, musicaId: Int, playlistDao: PlaylistDao) {
-    try {
-        val playlist = playlistDao.buscarPorId(playlistId)
-        if (playlist != null && musicaId !in playlist.listaDeIds()) {
-            val novaLista = playlist.listaDeIds() + musicaId
-            playlistDao.atualizar(playlist.copy(musicasIds = novaLista.joinToString(",")))
-        }
-    } catch (e: Exception) {
-        Log.e("Erro ao adicionar", "Msg: ${e.message}")
-    }
-}
-
-suspend fun removerMusicaDaPlaylist(playlistId: Int, musicaId: Int, playlistDao: PlaylistDao) {
-    try {
-        val playlist = playlistDao.buscarPorId(playlistId)
-        if (playlist != null && musicaId in playlist.listaDeIds()) {
-            val novaLista = playlist.listaDeIds().filter { it != musicaId }
-            playlistDao.atualizar(playlist.copy(musicasIds = novaLista.joinToString(",")))
-        }
-    } catch (e: Exception) {
-        Log.e("Erro ao remover", "Msg: ${e.message}")
-    }
-}
+import com.example.myapplication.viewmodel.PlaylistViewModel
+import com.example.myapplication.viewmodel.PlaylistViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val musicaDao = db.musicaDao()
-    val playlistDao = db.playlistDao()
-
-    var playlist by remember { mutableStateOf<Playlist?>(null) }
-    var musicasDaPlaylist by remember { mutableStateOf<List<Musica>>(emptyList()) }
-    var todasMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var showDialogAdicionarMusica by remember { mutableStateOf(false) }
-
-    fun recarregar() {
-        CoroutineScope(Dispatchers.IO).launch {
-            val p = buscarPlaylistPorId(playlistId, playlistDao)
-            val todas = buscarMusicas(musicaDao)
-            playlist = p
-            todasMusicas = todas
-            musicasDaPlaylist = if (p != null) todas.filter { it.id in p.listaDeIds() } else emptyList()
-            isLoading = false
-        }
-    }
+fun DetalhePlaylistScreen(
+    navController: NavController,
+    playlistId: Int,
+    viewModel: PlaylistViewModel = viewModel(
+        factory = PlaylistViewModelFactory(
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao()),
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(playlistId) {
-        recarregar()
+        viewModel.onCarregarDetalhe(playlistId)
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(playlist?.nome ?: "Detalhes da Playlist", color = Color.White) },
+                title = { Text(uiState.playlistSelecionada?.nome ?: "Detalhes da Playlist", color = Color.White) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1A3A)),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
@@ -104,19 +58,20 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
         },
         containerColor = Color(0xFF0D0B1D)
     ) { paddingValues ->
-        if (isLoading) {
+        if (uiState.isLoadingDetalhe) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFFD946EF))
             }
-        } else if (playlist == null) {
+        } else if (uiState.playlistSelecionada == null) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 Text("Playlist não encontrada!", color = Color.White, fontSize = 18.sp)
             }
         } else {
-            val pl = playlist!!
-            val tempoTotalSegundos = musicasDaPlaylist.sumOf { it.duracaoSegundos }
+            val pl = uiState.playlistSelecionada!!
+            val musicasDaPlaylist = uiState.musicasDaPlaylist
+            val tempoTotalSegundos = uiState.tempoTotalSegundos
             val tempoTotalMinutos = tempoTotalSegundos / 60
-            val musicaMaisOuvida = musicasDaPlaylist.maxByOrNull { it.reproducoes }
+            val musicaMaisOuvida = uiState.musicaMaisOuvida
 
             Column(
                 modifier = Modifier
@@ -178,7 +133,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    IconButton(onClick = { showDialogAdicionarMusica = true }) {
+                    IconButton(onClick = { viewModel.onMostrarDialogAdicionar() }) {
                         Icon(Icons.Default.Add, contentDescription = "Incluir Músicas", tint = Color(0xFFD946EF))
                     }
                 }
@@ -228,12 +183,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                         )
                                     }
                                     IconButton(
-                                        onClick = {
-                                            CoroutineScope(Dispatchers.IO).launch {
-                                                removerMusicaDaPlaylist(playlistId, musica.id, playlistDao)
-                                                recarregar()
-                                            }
-                                        }
+                                        onClick = { viewModel.onRemoverMusica(musica.id) }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Close,
@@ -250,11 +200,11 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
         }
     }
 
-    if (showDialogAdicionarMusica && playlist != null) {
-        val musicasForaDaPlaylist = todasMusicas.filter { it.id !in (playlist?.listaDeIds() ?: emptyList()) }
+    if (uiState.mostrarDialogAdicionar && uiState.playlistSelecionada != null) {
+        val musicasForaDaPlaylist = uiState.musicasForaDaPlaylist
 
         AlertDialog(
-            onDismissRequest = { showDialogAdicionarMusica = false },
+            onDismissRequest = { viewModel.onFecharDialogAdicionar() },
             title = { Text("Adicionar Música à Playlist", color = Color.White) },
             containerColor = Color(0xFF1E1A3A),
             text = {
@@ -267,11 +217,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            adicionarMusicaNaPlaylist(playlistId, m.id, playlistDao)
-                                            recarregar()
-                                        }
-                                        showDialogAdicionarMusica = false
+                                        viewModel.onAdicionarMusica(m.id)
                                     }
                                     .padding(8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -288,7 +234,7 @@ fun DetalhePlaylistScreen(navController: NavController, playlistId: Int) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showDialogAdicionarMusica = false }) {
+                TextButton(onClick = { viewModel.onFecharDialogAdicionar() }) {
                     Text("Fechar", color = Color(0xFFE0AAFF))
                 }
             }

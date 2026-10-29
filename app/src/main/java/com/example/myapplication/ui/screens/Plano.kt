@@ -1,4 +1,4 @@
-package com.example.myapplication.model
+package com.example.myapplication.ui.screens
 
 data class Plano(
     val id: Int = 0,

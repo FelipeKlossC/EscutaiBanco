@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
 
     val room_version = "3.0.3"
     implementation("androidx.room3:room3-runtime:$room_version")

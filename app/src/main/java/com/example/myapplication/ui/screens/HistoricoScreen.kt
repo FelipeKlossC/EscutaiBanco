@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.myapplication.model.Musica
+import com.example.myapplication.data.local.Musica
 import com.example.myapplication.navigation.Rotas
 
 val historicoMusicas = mutableListOf<Musica>()

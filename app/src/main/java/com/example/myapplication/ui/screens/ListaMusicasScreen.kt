@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.screens
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,94 +18,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.data.db.MusicaDao
-import com.example.myapplication.data.db.PlaylistDao
-import com.example.myapplication.model.Musica
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-suspend fun buscarMusicas(musicaDao: MusicaDao): List<Musica> {
-    return try {
-        musicaDao.buscarTodos()
-    } catch (e: Exception) {
-        Log.e("Erro ao buscar", "Msg: ${e.message}")
-        emptyList()
-    }
-}
-
-suspend fun inserirMusica(musica: Musica, musicaDao: MusicaDao) {
-    try {
-        musicaDao.inserir(musica)
-    } catch (e: Exception) {
-        Log.e("Erro ao inserir", "Msg: ${e.message}")
-    }
-}
-
-suspend fun atualizarMusica(musica: Musica, musicaDao: MusicaDao) {
-    try {
-        musicaDao.atualizar(musica)
-    } catch (e: Exception) {
-        Log.e("Erro ao atualizar", "Msg: ${e.message}")
-    }
-}
-
-suspend fun alternarFavorito(musica: Musica, musicaDao: MusicaDao) {
-    try {
-        musicaDao.atualizar(musica.copy(isFavorito = !musica.isFavorito))
-    } catch (e: Exception) {
-        Log.e("Erro ao alternar favorito", "Msg: ${e.message}")
-    }
-}
-
-suspend fun deletarMusica(musica: Musica, musicaDao: MusicaDao, playlistDao: PlaylistDao) {
-    try {
-        musicaDao.deletar(musica)
-        val playlists = playlistDao.buscarTodos()
-        for (pl in playlists) {
-            if (musica.id in pl.listaDeIds()) {
-                val novaLista = pl.listaDeIds().filter { it != musica.id }
-                playlistDao.atualizar(pl.copy(musicasIds = novaLista.joinToString(",")))
-            }
-        }
-        historicoMusicas.removeAll { it.id == musica.id }
-    } catch (e: Exception) {
-        Log.e("Erro ao deletar", "Msg: ${e.message}")
-    }
-}
+import com.example.myapplication.viewmodel.MusicaViewModel
+import com.example.myapplication.viewmodel.MusicaViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListaMusicasScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val musicaDao = db.musicaDao()
-    val playlistDao = db.playlistDao()
-
-    var listaMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    var titulo by remember { mutableStateOf("") }
-    var artista by remember { mutableStateOf("") }
-    var duracaoTexto by remember { mutableStateOf("") }
-    var genero by remember { mutableStateOf("") }
-    var erroFormulario by remember { mutableStateOf(false) }
-
-    var musicaParaEditar by remember { mutableStateOf<Musica?>(null) }
-    var editTitulo by remember { mutableStateOf("") }
-    var editArtista by remember { mutableStateOf("") }
-    var editDuracao by remember { mutableStateOf("") }
-    var editGenero by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            listaMusicas = buscarMusicas(musicaDao)
-            isLoading = false
-        }
-    }
+fun ListaMusicasScreen(
+    navController: NavController,
+    viewModel: MusicaViewModel = viewModel(
+        factory = MusicaViewModelFactory(
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao()),
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -145,8 +78,8 @@ fun ListaMusicasScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(10.dp))
 
                     OutlinedTextField(
-                        value = titulo,
-                        onValueChange = { titulo = it },
+                        value = uiState.titulo,
+                        onValueChange = { viewModel.onTituloChange(it) },
                         label = { Text("Título da Música") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -160,8 +93,8 @@ fun ListaMusicasScreen(navController: NavController) {
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = artista,
-                            onValueChange = { artista = it },
+                            value = uiState.artista,
+                            onValueChange = { viewModel.onArtistaChange(it) },
                             label = { Text("Artista") },
                             modifier = Modifier.weight(1f),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -172,8 +105,8 @@ fun ListaMusicasScreen(navController: NavController) {
                             )
                         )
                         OutlinedTextField(
-                            value = duracaoTexto,
-                            onValueChange = { duracaoTexto = it },
+                            value = uiState.duracaoTexto,
+                            onValueChange = { viewModel.onDuracaoChange(it) },
                             label = { Text("Duração (s)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
@@ -188,8 +121,8 @@ fun ListaMusicasScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
-                        value = genero,
-                        onValueChange = { genero = it },
+                        value = uiState.genero,
+                        onValueChange = { viewModel.onGeneroChange(it) },
                         label = { Text("Gênero Musical") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -200,7 +133,7 @@ fun ListaMusicasScreen(navController: NavController) {
                         )
                     )
 
-                    if (erroFormulario) {
+                    if (uiState.erroFormulario) {
                         Text(
                             text = "Preencha todos os campos corretamente!",
                             color = Color.Red,
@@ -212,36 +145,7 @@ fun ListaMusicasScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
-                        onClick = {
-                            val t = titulo.trim()
-                            val a = artista.trim()
-                            val durSeg = duracaoTexto.toIntOrNull()
-                            val g = if (genero.isBlank()) "Pop" else genero.trim()
-
-                            if (t.isNotBlank() && a.isNotBlank() && durSeg != null) {
-                                titulo = ""
-                                artista = ""
-                                duracaoTexto = ""
-                                genero = ""
-                                erroFormulario = false
-
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    inserirMusica(
-                                        Musica(
-                                            titulo = t,
-                                            artista = a,
-                                            album = "Single",
-                                            duracaoSegundos = durSeg,
-                                            genero = g
-                                        ),
-                                        musicaDao
-                                    )
-                                    listaMusicas = buscarMusicas(musicaDao)
-                                }
-                            } else {
-                                erroFormulario = true
-                            }
-                        },
+                        onClick = { viewModel.onAdicionar() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88)),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -254,18 +158,18 @@ fun ListaMusicasScreen(navController: NavController) {
             }
 
             Text(
-                text = "Músicas Cadastradas (${listaMusicas.size})",
+                text = "Músicas Cadastradas (${uiState.listaDeMusicas.size})",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
 
-            if (isLoading) {
+            if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color(0xFFD946EF))
                 }
-            } else if (listaMusicas.isEmpty()) {
+            } else if (uiState.listaDeMusicas.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Nenhuma música cadastrada no banco.", color = Color.Gray)
                 }
@@ -274,7 +178,7 @@ fun ListaMusicasScreen(navController: NavController) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(listaMusicas, key = { it.id }) { musica ->
+                    items(uiState.listaDeMusicas, key = { it.id }) { musica ->
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1A3A)),
@@ -318,13 +222,7 @@ fun ListaMusicasScreen(navController: NavController) {
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = {
-                                        musicaParaEditar = musica
-                                        editTitulo = musica.titulo
-                                        editArtista = musica.artista
-                                        editDuracao = musica.duracaoSegundos.toString()
-                                        editGenero = musica.genero
-                                    }) {
+                                    IconButton(onClick = { viewModel.onEditar(musica) }) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Editar Música",
@@ -332,12 +230,7 @@ fun ListaMusicasScreen(navController: NavController) {
                                         )
                                     }
 
-                                    IconButton(onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            alternarFavorito(musica, musicaDao)
-                                            listaMusicas = buscarMusicas(musicaDao)
-                                        }
-                                    }) {
+                                    IconButton(onClick = { viewModel.onFavoritar(musica) }) {
                                         Icon(
                                             imageVector = if (musica.isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                             contentDescription = "Favorito",
@@ -346,10 +239,8 @@ fun ListaMusicasScreen(navController: NavController) {
                                     }
 
                                     IconButton(onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            deletarMusica(musica, musicaDao, playlistDao)
-                                            listaMusicas = buscarMusicas(musicaDao)
-                                        }
+                                        viewModel.onDelete(musica)
+                                        historicoMusicas.removeAll { it.id == musica.id }
                                     }) {
                                         Icon(
                                             imageVector = Icons.Default.Delete,
@@ -366,35 +257,35 @@ fun ListaMusicasScreen(navController: NavController) {
         }
     }
 
-    musicaParaEditar?.let { musica ->
+    uiState.musicaEmEdicao?.let { _ ->
         AlertDialog(
-            onDismissRequest = { musicaParaEditar = null },
+            onDismissRequest = { viewModel.onCancelarEdicao() },
             title = { Text("Editar Música", color = Color.White) },
             containerColor = Color(0xFF1E1A3A),
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = editTitulo,
-                        onValueChange = { editTitulo = it },
+                        value = uiState.editTitulo,
+                        onValueChange = { viewModel.onEditTituloChange(it) },
                         label = { Text("Título") },
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
                     OutlinedTextField(
-                        value = editArtista,
-                        onValueChange = { editArtista = it },
+                        value = uiState.editArtista,
+                        onValueChange = { viewModel.onEditArtistaChange(it) },
                         label = { Text("Artista") },
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
                     OutlinedTextField(
-                        value = editDuracao,
-                        onValueChange = { editDuracao = it },
+                        value = uiState.editDuracao,
+                        onValueChange = { viewModel.onEditDuracaoChange(it) },
                         label = { Text("Duração (s)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
                     OutlinedTextField(
-                        value = editGenero,
-                        onValueChange = { editGenero = it },
+                        value = uiState.editGenero,
+                        onValueChange = { viewModel.onEditGeneroChange(it) },
                         label = { Text("Gênero") },
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
@@ -402,32 +293,14 @@ fun ListaMusicasScreen(navController: NavController) {
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        val t = editTitulo.trim().ifBlank { musica.titulo }
-                        val a = editArtista.trim().ifBlank { musica.artista }
-                        val durSeg = editDuracao.toIntOrNull() ?: musica.duracaoSegundos
-                        val g = editGenero.trim().ifBlank { musica.genero }
-
-                        val musicaAtualizada = musica.copy(
-                            titulo = t,
-                            artista = a,
-                            duracaoSegundos = durSeg,
-                            genero = g
-                        )
-                        musicaParaEditar = null
-
-                        CoroutineScope(Dispatchers.IO).launch {
-                            atualizarMusica(musicaAtualizada, musicaDao)
-                            listaMusicas = buscarMusicas(musicaDao)
-                        }
-                    },
+                    onClick = { viewModel.onSalvarEdicao() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8A1B88))
                 ) {
                     Text("Salvar no Banco")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { musicaParaEditar = null }) {
+                TextButton(onClick = { viewModel.onCancelarEdicao() }) {
                     Text("Cancelar", color = Color.Gray)
                 }
             }

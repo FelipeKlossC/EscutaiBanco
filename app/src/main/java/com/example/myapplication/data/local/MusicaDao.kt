@@ -1,11 +1,11 @@
-package com.example.myapplication.data.db
+package com.example.myapplication.data.local
 
 import androidx.room3.Dao
 import androidx.room3.Delete
 import androidx.room3.Insert
 import androidx.room3.Query
 import androidx.room3.Update
-import com.example.myapplication.model.Musica
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MusicaDao {
@@ -13,7 +13,7 @@ interface MusicaDao {
     suspend fun inserir(musica: Musica)
 
     @Query("SELECT * FROM musicas")
-    suspend fun buscarTodos(): List<Musica>
+    fun buscarTodos(): Flow<List<Musica>>
 
     @Update
     suspend fun atualizar(musica: Musica)

@@ -16,30 +16,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.model.Musica
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.example.myapplication.viewmodel.MusicaViewModel
+import com.example.myapplication.viewmodel.MusicaViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopStatsScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val musicaDao = db.musicaDao()
-
-    var topMusicas by remember { mutableStateOf<List<Musica>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            topMusicas = buscarMusicas(musicaDao).sortedByDescending { it.reproducoes }
-            isLoading = false
-        }
-    }
+fun TopStatsScreen(
+    navController: NavController,
+    viewModel: MusicaViewModel = viewModel(
+        factory = MusicaViewModelFactory(
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao()),
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val topMusicas = uiState.musicasMaisOuvidas
 
     Scaffold(
         topBar = {
@@ -80,7 +79,7 @@ fun TopStatsScreen(navController: NavController) {
                 )
             }
 
-            if (isLoading) {
+            if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Color(0xFFD946EF))
                 }

@@ -21,30 +21,38 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.model.Playlist
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
 import com.example.myapplication.navigation.Rotas
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.example.myapplication.viewmodel.MusicaViewModel
+import com.example.myapplication.viewmodel.MusicaViewModelFactory
+import com.example.myapplication.viewmodel.PlaylistViewModel
+import com.example.myapplication.viewmodel.PlaylistViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val playlistDao = db.playlistDao()
-
-    var playlists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentProgress by remember { mutableFloatStateOf(0.35f) }
-
-    LaunchedEffect(Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            playlists = buscarPlaylists(playlistDao)
-        }
-    }
+fun HomeScreen(
+    navController: NavController,
+    playlistViewModel: PlaylistViewModel = viewModel(
+        factory = PlaylistViewModelFactory(
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao()),
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao())
+        )
+    ),
+    musicaViewModel: MusicaViewModel = viewModel(
+        factory = MusicaViewModelFactory(
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao()),
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao())
+        )
+    )
+) {
+    val playlistUiState by playlistViewModel.uiState.collectAsStateWithLifecycle()
+    val musicaUiState by musicaViewModel.uiState.collectAsStateWithLifecycle()
+    val playlists = playlistUiState.listaDePlaylists
 
     Column(
         modifier = Modifier
@@ -192,14 +200,14 @@ fun HomeScreen(navController: NavController) {
                             Icon(Icons.Default.SkipPrevious, contentDescription = "Anterior", tint = Color.White)
                         }
                         FloatingActionButton(
-                            onClick = { isPlaying = !isPlaying },
+                            onClick = { musicaViewModel.onPlayPause() },
                             shape = CircleShape,
                             containerColor = Color.White,
                             contentColor = Color(0xFF0D0B1D),
                             modifier = Modifier.size(56.dp)
                         ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                imageVector = if (musicaUiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = "Play/Pause",
                                 modifier = Modifier.size(32.dp)
                             )
@@ -215,8 +223,8 @@ fun HomeScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Slider(
-                        value = currentProgress,
-                        onValueChange = { currentProgress = it },
+                        value = musicaUiState.progressoPlayer,
+                        onValueChange = { musicaViewModel.onProgressoChange(it) },
                         colors = SliderDefaults.colors(
                             thumbColor = Color(0xFFD946EF),
                             activeTrackColor = Color(0xFFD946EF),

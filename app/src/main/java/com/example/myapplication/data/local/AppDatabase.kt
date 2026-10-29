@@ -1,11 +1,9 @@
-package com.example.myapplication.data.db
+package com.example.myapplication.data.local
 
 import android.content.Context
 import androidx.room3.Database
 import androidx.room3.Room
 import androidx.room3.RoomDatabase
-import com.example.myapplication.model.Musica
-import com.example.myapplication.model.Playlist
 
 @Database(entities = [Musica::class, Playlist::class], version = 1)
 abstract class AppDatabase : RoomDatabase() {

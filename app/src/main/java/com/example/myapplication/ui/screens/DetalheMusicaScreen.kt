@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.screens
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,42 +16,36 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.myapplication.data.db.AppDatabase
-import com.example.myapplication.data.db.MusicaDao
-import com.example.myapplication.model.Musica
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-suspend fun buscarMusicaPorId(id: Int, musicaDao: MusicaDao): Musica? {
-    return try {
-        musicaDao.buscarPorId(id)
-    } catch (e: Exception) {
-        Log.e("Erro ao buscar por id", "Msg: ${e.message}")
-        null
-    }
-}
+import com.example.myapplication.data.local.AppDatabase
+import com.example.myapplication.data.repository.MusicaRepository
+import com.example.myapplication.data.repository.PlaylistRepository
+import com.example.myapplication.viewmodel.MusicaViewModel
+import com.example.myapplication.viewmodel.MusicaViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
-    val context = LocalContext.current
-    val db = AppDatabase.getDatabase(context)
-    val musicaDao = db.musicaDao()
-
-    var musica by remember { mutableStateOf<Musica?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var isPlaying by remember { mutableStateOf(false) }
+fun DetalheMusicaScreen(
+    navController: NavController,
+    musicaId: Int,
+    viewModel: MusicaViewModel = viewModel(
+        factory = MusicaViewModelFactory(
+            MusicaRepository(AppDatabase.getDatabase(LocalContext.current).musicaDao()),
+            PlaylistRepository(AppDatabase.getDatabase(LocalContext.current).playlistDao())
+        )
+    )
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(musicaId) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val item = buscarMusicaPorId(musicaId, musicaDao)
-            musica = item
-            isLoading = false
-            if (item != null) {
-                registrarNoHistorico(item)
-            }
+        viewModel.onCarregarDetalhe(musicaId)
+    }
+
+    LaunchedEffect(uiState.musicaSelecionada?.id) {
+        uiState.musicaSelecionada?.let {
+            registrarNoHistorico(it)
         }
     }
 
@@ -70,7 +63,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
         },
         containerColor = Color(0xFF0D0B1D)
     ) { paddingValues ->
-        if (isLoading) {
+        if (uiState.isLoadingDetalhe) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -79,7 +72,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
             ) {
                 CircularProgressIndicator(color = Color(0xFFD946EF))
             }
-        } else if (musica == null) {
+        } else if (uiState.musicaSelecionada == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -89,7 +82,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                 Text("Música não encontrada no banco de dados!", color = Color.White, fontSize = 18.sp)
             }
         } else {
-            val itemMusica = musica!!
+            val itemMusica = uiState.musicaSelecionada!!
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -182,12 +175,7 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            alternarFavorito(itemMusica, musicaDao)
-                            musica = buscarMusicaPorId(musicaId, musicaDao)
-                        }
-                    }) {
+                    IconButton(onClick = { viewModel.onFavoritar(itemMusica) }) {
                         Icon(
                             imageVector = if (itemMusica.isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favoritar",
@@ -197,23 +185,14 @@ fun DetalheMusicaScreen(navController: NavController, musicaId: Int) {
                     }
 
                     FloatingActionButton(
-                        onClick = {
-                            isPlaying = !isPlaying
-                            if (isPlaying) {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    val musicaAtualizada = itemMusica.copy(reproducoes = itemMusica.reproducoes + 1)
-                                    atualizarMusica(musicaAtualizada, musicaDao)
-                                    musica = musicaAtualizada
-                                }
-                            }
-                        },
+                        onClick = { viewModel.onPlayPause() },
                         shape = CircleShape,
                         containerColor = Color(0xFF8A1B88),
                         contentColor = Color.White,
                         modifier = Modifier.size(64.dp)
                     ) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Tocar Faixa",
                             modifier = Modifier.size(36.dp)
                         )
