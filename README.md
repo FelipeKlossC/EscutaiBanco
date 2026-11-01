@@ -71,7 +71,7 @@ O MusicaUiState tem a lista de músicas, a lista de playlists (usada pra limpar 
 
 O PlaylistUiState tem a lista de playlists, todas as músicas, se está carregando, os campos do formulário de criar playlist e o erro, a playlist em edição com seus campos, a playlist selecionada pro detalhe e se o diálogo de adicionar música está aberto. As propriedades calculadas são musicasDaPlaylist, musicasForaDaPlaylist, tempoTotalSegundos e musicaMaisOuvida, que alimentam as métricas do detalhe da playlist.
 
-A gente escolheu esses campos porque são tudo o que cada tela precisa pra se desenhar. Assim a tela não guarda estado nenhum por conta própria.
+A gente escolheu esses campos porque são tudo o que cada tela precisa pra se desenhar. Assim as telas que usam o banco não guardam estado nenhum por conta própria.
 
 O que quebrou no caminho:
 
@@ -102,4 +102,6 @@ Os botões de play são simulados e não tocam áudio de verdade. O histórico d
 
 Equipe:
 
-Felipe Kloss Conceição: arquitetura MVVM, repositórios e organização dos pacotes de dados. Gabriel Asserman: ViewModels de música e integração das telas da biblioteca e do detalhe de música. Mariana Almeida: ViewModels de playlist e integração das telas de playlists, favoritos e top.
+Felipe Kloss Conceição: arquitetura MVVM, repositórios e organização dos pacotes de dados.
+Gabriel Asserman: ViewModels de música e integração das telas da biblioteca e do detalhe de música.
+Mariana Almeida: ViewModels de playlist e integração das telas de playlists, favoritos e top.
