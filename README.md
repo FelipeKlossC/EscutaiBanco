@@ -10,7 +10,7 @@ Neste Trabalho 4 a gente não criou nenhuma tela nem funcionalidade nova. O app 
 
 Documentação e evidências:
 
-A documentação do trabalho (com as respostas do enunciado, prints e vídeos) está na pasta docs do repositório.
+A documentação do trabalho está na pasta docs do repositório, os vídeos e prints em pasta zipada enviada via BlackBoard.
 
 Prints das telas do app:
 
